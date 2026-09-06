@@ -29,7 +29,10 @@ module.exports = async (req, res) => {
       teamIdCounter: 0,
       pity95: 0,
       pity98: 0,
-      friends: []
+      friends: [],
+      friendRequestsIncoming: [],
+      friendRequestsOutgoing: [],
+      lastActive: Date.now()
     };
     await ref.set(initData);
 
