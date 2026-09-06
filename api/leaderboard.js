@@ -2,11 +2,14 @@ const admin = require('firebase-admin');
 
 function getDb() {
   if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
-    });
+    admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
   }
   return admin.firestore();
+}
+
+function getPlayerGen(player) {
+  const value = Number(player?.gen);
+  return Number.isFinite(value) ? value : 0;
 }
 
 module.exports = async (req, res) => {
@@ -16,16 +19,13 @@ module.exports = async (req, res) => {
     const snapshot = await db.collection('users').get();
     const result = [];
     snapshot.forEach(docSnap => {
-      const uData = docSnap.data();
-      let ovr = 0;
-      if (uData && uData.pitch) {
-        let tot = 0, c = 0;
-        Object.values(uData.pitch).forEach(p => { if (p) { tot += p.gen; c++; } });
-        const slotsLen = Object.keys(uData.pitch).length;
-        ovr = c === 0 ? 0 : Math.round((tot / c) * (c / slotsLen));
-      }
+      const uData = docSnap.data() || {};
+      const players = Object.values(uData.pitch || {}).filter(Boolean);
+      const total = players.reduce((sum, player) => sum + getPlayerGen(player), 0);
+      const ovr = players.length ? Math.round(total / players.length) : 0;
       result.push({ username: docSnap.id, ovr });
     });
+    result.sort((a, b) => b.ovr - a.ovr || a.username.localeCompare(b.username));
     return res.status(200).json(result);
   } catch (e) {
     console.error(e);
