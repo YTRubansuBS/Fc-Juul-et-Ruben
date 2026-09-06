@@ -27,8 +27,6 @@ module.exports = async (req, res) => {
       currentFormation: '433',
       pitch: {},
       teamIdCounter: 0,
-      pity95: 0,
-      pity98: 0,
       friends: [],
       friendRequestsIncoming: [],
       friendRequestsOutgoing: [],
