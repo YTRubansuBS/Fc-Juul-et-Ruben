@@ -95,6 +95,7 @@ nav button.active-nav, nav button:hover { background-color: var(--accent); color
 .sim-event.goal { border-left-color: #f1c40f; background: rgba(241, 196, 15, 0.15); font-weight: bold; color: #f1c40f; }
 .sim-event.away-goal { border-left-color: #e74c3c; background: rgba(231, 76, 60, 0.15); font-weight: bold; color: #ff6b6b; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <b>
 
@@ -391,6 +392,12 @@ nav button.active-nav, nav button:hover { background-color: var(--accent); color
          L'appareil de l'utilisateur ne contacte plus jamais googleapis.com directement. -->
 
 <script>
+// ============================================================
+// CONFIGURATION SUPABASE
+// ============================================================
+const SUPABASE_URL = "https://wfdljmrvqnxhxqbgcctb.supabase.co/rest/v1/";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmZGxqbXJ2cW54aHhxYmdjY3RiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MDA1NDcsImV4cCI6MjEwNDI3NjU0N30.zb-Lr_FNra1K92v8BCaPvllIUmRXBe3onb8sEIWosF8";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUser = null, isGuest = true, gems = 0, inventory = [], teamIdCounter = 0, packCooldown = false, activeTimeouts = [];
 let currentFormation = '433';
 let pitch = {}; 
