@@ -9,7 +9,7 @@ function getDb() {
   return admin.firestore();
 }
 
-const ONLINE_WINDOW_MS = 45000;
+const ONLINE_WINDOW_MS = 90000;
 const MATCH_REWARD = 800;
 
 async function checkAuth(db, id, password) {
@@ -87,6 +87,8 @@ module.exports = async (req, res) => {
         players: [id, target],
         hostOvr: Math.round(myOvr) || 70,
         guestOvr: 0,
+        hostBet: null,
+        guestBet: null,
         status: 'pending',
         time: 0,
         homeScore: 0,
@@ -115,9 +117,45 @@ module.exports = async (req, res) => {
         if (!accept) {
           match.status = 'declined';
         } else {
-          match.status = 'live';
+          match.status = 'betting';
           match.guestOvr = Math.round(myOvr) || 70;
         }
+        tx.set(matchRef, match);
+        return match;
+      });
+      return res.status(200).json({ id: matchId, ...result });
+    }
+
+    if (action === 'setBet') {
+      const { bet } = body;
+      const betAmount = Math.max(0, Math.floor(Number(bet)) || 0);
+      const result = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(matchRef);
+        if (!snap.exists) throw new Error('Match introuvable.');
+        const match = snap.data();
+        if (!match.players.includes(id)) throw new Error("Vous ne participez pas à ce match.");
+        if (match.status !== 'betting') throw new Error("La phase de mise est terminée.");
+
+        const isHostPlayer = match.players[0] === id;
+        if (isHostPlayer && match.hostBet !== null) throw new Error('Mise déjà effectuée.');
+        if (!isHostPlayer && match.guestBet !== null) throw new Error('Mise déjà effectuée.');
+
+        const userRef = db.collection('users').doc(id);
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists) throw new Error('Utilisateur introuvable.');
+        const userData = userSnap.data();
+        if (betAmount > 0) {
+          if ((userData.gems || 0) < betAmount) throw new Error("Vous n'avez pas assez de gemmes pour cette mise.");
+          tx.update(userRef, { gems: admin.firestore.FieldValue.increment(-betAmount) });
+        }
+
+        if (isHostPlayer) match.hostBet = betAmount;
+        else match.guestBet = betAmount;
+
+        if (match.hostBet !== null && match.guestBet !== null) {
+          match.status = 'live';
+        }
+
         tx.set(matchRef, match);
         return match;
       });
@@ -129,8 +167,11 @@ module.exports = async (req, res) => {
         const snap = await tx.get(matchRef);
         if (!snap.exists) throw new Error('Match introuvable.');
         const match = snap.data();
-        if (match.players[0] !== id) throw new Error("Seul l'hôte du match fait avancer la simulation.");
+        if (match.players[0] !== id) throw new Error("Seul celui qui a envoyé l'invitation fait avancer la simulation.");
         if (match.status !== 'live') return match;
+
+        const hostName = match.players[0];
+        const guestName = match.players[1];
 
         match.time += Math.floor(Math.random() * 5) + 3;
         if (match.time >= 90) {
@@ -146,7 +187,7 @@ module.exports = async (req, res) => {
         if (chance < 40 + diff * 0.7) {
           if (Math.random() > 0.4) {
             match.homeScore++;
-            text = `⚽ BUT ! L'équipe hôte marque ! (${match.homeScore}-${match.awayScore})`;
+            text = `⚽ BUT ! L'équipe de ${hostName} marque ! (${match.homeScore}-${match.awayScore})`;
             type = 'goal';
           } else {
             text = randomComment();
@@ -154,7 +195,7 @@ module.exports = async (req, res) => {
         } else if (chance > 65 - diff * 0.5) {
           if (Math.random() > 0.65) {
             match.awayScore++;
-            text = `❌ But de l'équipe invitée ! (${match.homeScore}-${match.awayScore})`;
+            text = `❌ But de l'équipe de ${guestName} ! (${match.homeScore}-${match.awayScore})`;
             type = 'away-goal';
           } else {
             text = randomComment();
@@ -169,10 +210,24 @@ module.exports = async (req, res) => {
           const draw = match.homeScore === match.awayScore;
           const hostPrize = won ? match.reward : (draw ? Math.floor(match.reward / 3) : 60);
           const guestPrize = (!won && !draw) ? match.reward : (draw ? Math.floor(match.reward / 3) : 60);
-          tx.update(db.collection('users').doc(match.players[0]), { gems: admin.firestore.FieldValue.increment(hostPrize) });
-          tx.update(db.collection('users').doc(match.players[1]), { gems: admin.firestore.FieldValue.increment(guestPrize) });
+
+          const hostBet = match.hostBet || 0;
+          const guestBet = match.guestBet || 0;
+          const pot = hostBet + guestBet;
+          let hostBetPayout = 0;
+          let guestBetPayout = 0;
+          if (pot > 0) {
+            if (won) hostBetPayout = pot;
+            else if (!won && !draw) guestBetPayout = pot;
+            else { hostBetPayout = hostBet; guestBetPayout = guestBet; } // égalité : chacun récupère sa mise
+          }
+
+          tx.update(db.collection('users').doc(hostName), { gems: admin.firestore.FieldValue.increment(hostPrize + hostBetPayout) });
+          tx.update(db.collection('users').doc(guestName), { gems: admin.firestore.FieldValue.increment(guestPrize + guestBetPayout) });
           match.hostPrize = hostPrize;
           match.guestPrize = guestPrize;
+          match.hostBetPayout = hostBetPayout;
+          match.guestBetPayout = guestBetPayout;
         }
 
         tx.set(matchRef, match);
