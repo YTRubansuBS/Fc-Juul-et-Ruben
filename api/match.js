@@ -181,19 +181,26 @@ module.exports = async (req, res) => {
         }
 
         const diff = match.hostOvr - match.guestOvr;
-        const chance = Math.random() * 100;
+        const BASE = 0.30, COEF = 0.007, MIN_A = 0.04, MAX_A = 0.62;
+        const pHost = Math.min(MAX_A, Math.max(MIN_A, BASE + diff * COEF));
+        const pGuest = Math.min(MAX_A, Math.max(MIN_A, BASE - diff * COEF));
+        const CONV_BASE = 0.30, CONV_COEF = 0.003, CONV_MIN = 0.15, CONV_MAX = 0.55;
+        const convHost = Math.min(CONV_MAX, Math.max(CONV_MIN, CONV_BASE + diff * CONV_COEF));
+        const convGuest = Math.min(CONV_MAX, Math.max(CONV_MIN, CONV_BASE - diff * CONV_COEF));
+
+        const r = Math.random();
         let text = '';
         let type = '';
-        if (chance < 40 + diff * 0.7) {
-          if (Math.random() > 0.4) {
+        if (r < pHost) {
+          if (Math.random() < convHost) {
             match.homeScore++;
             text = `⚽ BUT ! L'équipe de ${hostName} marque ! (${match.homeScore}-${match.awayScore})`;
             type = 'goal';
           } else {
             text = randomComment();
           }
-        } else if (chance > 65 - diff * 0.5) {
-          if (Math.random() > 0.65) {
+        } else if (r < pHost + pGuest) {
+          if (Math.random() < convGuest) {
             match.awayScore++;
             text = `❌ But de l'équipe de ${guestName} ! (${match.homeScore}-${match.awayScore})`;
             type = 'away-goal';
