@@ -12,7 +12,7 @@ function getDb() {
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée.' });
   try {
-    const { id, password, gems, inventory, currentFormation, pitch, teamIdCounter, pity95, pity98, friends } = req.body || {};
+    const { id, password, gems, inventory, currentFormation, pitch, teamIdCounter, friends } = req.body || {};
     if (!id || !password) return res.status(400).json({ error: 'ID et mot de passe requis.' });
 
     const db = getDb();
@@ -29,8 +29,6 @@ module.exports = async (req, res) => {
       currentFormation: currentFormation || '433',
       pitch: pitch || {},
       teamIdCounter: teamIdCounter || 0,
-      pity95: pity95 || 0,
-      pity98: pity98 || 0,
       friends: friends || []
     }, { merge: true });
 
