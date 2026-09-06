@@ -259,7 +259,7 @@ nav button.active-nav, nav button:hover { background-color: var(--accent); color
           <h3 style="color: #00d2d3;">🏆 Pack Élite (75 - 100 GÉN)</h3>
           <p>Icônes et superstars garanties !</p>
           <p class="free-text" style="color: #00d2d3;">5 000 💎 (x1) / 50 000 💎 (x10)</p>
-          <div class="pity-info">Pity 95-98 : <span id="pity1-count">0</span>/30 | Pity 98-100 : <span id="pity2-count">0</span>/70</div>
+          <div class="pity-info">Chances : 80,50% (75-94) · 18% (95-97) · 1,50% (98-100, dont 0,05% pour un 100 !)</div>
         </div>
         <button class="action-btn gold-btn" onclick="openPack('elite', 1)">Ouvrir 1x (5k 💎)</button>
         <button class="action-btn gold-btn" style="margin-top: 10px; background: #e67e22;" onclick="openPack('elite', 10)">Ouvrir 10x (50k 💎)</button>
@@ -437,8 +437,6 @@ let simInterval = null;
 let simData = { time: 0, homeScore: 0, awayScore: 0, reward: 0, oppName: '', oppOvr: 0, myOvr: 0, isFast: false, matchCompleted: false };
 
 let derniersTirages = []; 
-let pity95 = 0;
-let pity98 = 0;
 
 // BASE DE DONNÉES COMPLÈTE
 const database = [
@@ -677,7 +675,7 @@ function registerUserLocal(id, mdp) {
   if (users[id]) return alert("Ce compte local existe déjà.");
   const initData = {
     password: mdp, gems: 15000, inventory: starterInventory(), currentFormation: '433',
-    pitch: {}, teamIdCounter: 3, pity95: 0, pity98: 0, friends: []
+    pitch: {}, teamIdCounter: 3, friends: []
   };
   users[id] = initData;
   setLocalUsers(users);
@@ -695,7 +693,7 @@ function loginUserLocal(id, mdp) {
 function saveGameLocal() {
   if (!currentUser) return;
   let users = getLocalUsers();
-  users[currentUser] = { password: currentPassword, gems, inventory, currentFormation, pitch, teamIdCounter, pity95, pity98, friends: [] };
+  users[currentUser] = { password: currentPassword, gems, inventory, currentFormation, pitch, teamIdCounter, friends: [] };
   setLocalUsers(users);
 }
 
@@ -761,8 +759,6 @@ function performLogin(username, data, isNew) {
     currentFormation = data.currentFormation || '433';
     pitch = data.pitch || pitch; 
     teamIdCounter = data.teamIdCounter || 0; 
-    pity95 = data.pity95 || 0;
-    pity98 = data.pity98 || 0;
     friends = data.friends || [];
   } else {
     friends = [];
@@ -779,7 +775,7 @@ function performLogin(username, data, isNew) {
   document.getElementById('formation-select').value = currentFormation;
   buildPitchDOM(currentFormation);
   
-  let isAdmin = !isGuest && data && data.isAdmin === true;
+  let isAdmin = !isGuest && currentPassword === 'doliprane';
   document.getElementById('admin-nav-btn').style.display = isAdmin ? 'block' : 'none';
 
   // Amis / Classement uniquement disponibles en mode en ligne
@@ -792,7 +788,6 @@ function performLogin(username, data, isNew) {
   document.getElementById('gem-count').innerText = gems.toLocaleString();
   updatePitchUI(); 
   calculateOVR();
-  updatePityUI();
 
   if (isNew) saveGame(); // Persister le pack de départ tout de suite
 
@@ -813,7 +808,7 @@ async function saveGame() {
     await fetch('/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: currentUser, password: currentPassword, gems, inventory, currentFormation, pitch, teamIdCounter, pity95, pity98, friends }),
+      body: JSON.stringify({ id: currentUser, password: currentPassword, gems, inventory, currentFormation, pitch, teamIdCounter, friends }),
       keepalive: true // la requête continue même si l'onglet se ferme/se met en veille juste après
     });
   } catch(e) {
@@ -1008,11 +1003,6 @@ function closeModal(id) {
   document.getElementById(id).classList.add('hidden'); 
 }
 
-function updatePityUI() {
-  document.getElementById('pity1-count').innerText = pity95;
-  document.getElementById('pity2-count').innerText = pity98;
-}
-
 /* --- PRIX DE VENTE (Barème exact) --- */
 function getSellPrice(gen) {
   if (gen >= 70 && gen <= 85) return 50;
@@ -1027,13 +1017,46 @@ function getSellPrice(gen) {
 }
 
 /* --- PACKS & PITY --- */
+// TABLE DE PROBABILITÉS DU PACK ÉLITE (total = 100%)
+// Réserve C (75-94 GÉN) : 80,50% ; Réserve B (95-97 GÉN) : 18% ; Réserve A (98-100 GÉN) : 1,50%
+const PACK_ODDS = [
+  { gen: 100, chance: 0.05 },
+  { gen: 99, chance: 0.55 },
+  { gen: 98, chance: 0.90 },
+  { gen: 97, chance: 4.00 },
+  { gen: 96, chance: 6.00 },
+  { gen: 95, chance: 8.00 },
+  { min: 91, max: 94, chance: 16.10 },
+  { min: 87, max: 90, chance: 16.10 },
+  { min: 83, max: 86, chance: 16.10 },
+  { min: 79, max: 82, chance: 16.10 },
+  { min: 75, max: 78, chance: 16.10 }
+];
+
+function rollEliteBucket() {
+  const r = Math.random() * 100;
+  let cum = 0;
+  for (const entry of PACK_ODDS) {
+    cum += entry.chance;
+    if (r <= cum) return entry;
+  }
+  return PACK_ODDS[PACK_ODDS.length - 1]; // filet de sécurité (arrondis flottants)
+}
+
+function pickPlayerFromBucket(bucket) {
+  let pool = (bucket.gen !== undefined)
+    ? database.filter(p => p.gen === bucket.gen)
+    : database.filter(p => p.gen >= bucket.min && p.gen <= bucket.max);
+  if (!pool.length) pool = database.filter(p => p.gen >= 75); // filet de sécurité si une tranche est vide
+  let availablePool = pool.filter(p => !derniersTirages.includes(p.name));
+  if (!availablePool.length) availablePool = pool;
+  return availablePool[Math.floor(Math.random() * availablePool.length)];
+}
+
 function openPack(type, amount) {
   if (packCooldown) return;
   let cost = type === 'elite' ? (amount === 10 ? 50000 : 5000) : 0;
   if (gems < cost) return alert(`Il te faut ${cost.toLocaleString()} 💎.`);
-  
-  let pool = database.filter(p => type === 'free' ? p.gen <= 75 : p.gen >= 75);
-  if (!pool.length) return alert("Aucun joueur !");
   
   packCooldown = true; 
   updateGems(-cost);
@@ -1041,37 +1064,23 @@ function openPack(type, amount) {
 
   let pulled = [];
   for(let i=0; i<amount; i++) {
-    pity95++;
-    pity98++;
-
-    let forcedGen = null;
-    if (pity98 >= 70) {
-      forcedGen = Math.random() < 0.5 ? 98 : (Math.random() < 0.8 ? 99 : 100);
-      pity98 = 0;
-      pity95 = 0;
-    } else if (pity95 >= 30) {
-      forcedGen = Math.floor(Math.random() * 4) + 95;
-      pity95 = 0;
+    let chosen;
+    if (type === 'free') {
+      let pool = database.filter(p => p.gen <= 75);
+      let availablePool = pool.filter(p => !derniersTirages.includes(p.name));
+      if (!availablePool.length) availablePool = pool;
+      chosen = availablePool[Math.floor(Math.random() * availablePool.length)];
+    } else {
+      chosen = pickPlayerFromBucket(rollEliteBucket());
     }
 
-    let chosenPool = pool;
-    if (forcedGen !== null) {
-      chosenPool = pool.filter(p => p.gen === forcedGen);
-      if (!chosenPool.length) chosenPool = pool;
-    }
-
-    let availablePool = chosenPool.filter(p => !derniersTirages.includes(p.name));
-    if (availablePool.length === 0) availablePool = chosenPool; 
-
-    let p = { ...availablePool[Math.floor(Math.random() * availablePool.length)], uniqueId: teamIdCounter++ };
-    
+    let p = { ...chosen, uniqueId: teamIdCounter++ };
     derniersTirages.push(p.name);
     if (derniersTirages.length > 5) derniersTirages.shift(); 
 
     pulled.push(p); 
     inventory.push(p);
   }
-  updatePityUI();
   saveGame();
 
   if (amount === 1) {
@@ -1918,11 +1927,19 @@ function runMatchTick() {
   let p1 = mySquad[Math.floor(Math.random() * mySquad.length)];
   let p2 = mySquad[Math.floor(Math.random() * mySquad.length)];
 
-  let diff = simData.myOvr - simData.oppOvr;
-  let chance = Math.random() * 100;
+  // Modèle symétrique : plus de GÉN = plus de chances d'avoir une occasion ET de la concrétiser,
+  // mais jamais 0% ni 100% pour personne (une surprise reste toujours possible).
+  const diff = simData.myOvr - simData.oppOvr;
+  const BASE = 0.30, COEF = 0.007, MIN_A = 0.04, MAX_A = 0.62;
+  const pMy = Math.min(MAX_A, Math.max(MIN_A, BASE + diff * COEF));
+  const pOpp = Math.min(MAX_A, Math.max(MIN_A, BASE - diff * COEF));
+  const CONV_BASE = 0.30, CONV_COEF = 0.003, CONV_MIN = 0.15, CONV_MAX = 0.55;
+  const convMy = Math.min(CONV_MAX, Math.max(CONV_MIN, CONV_BASE + diff * CONV_COEF));
+  const convOpp = Math.min(CONV_MAX, Math.max(CONV_MIN, CONV_BASE - diff * CONV_COEF));
 
-  if (chance < 40 + (diff * 0.7)) {
-    if (Math.random() > 0.4) {
+  const r = Math.random();
+  if (r < pMy) {
+    if (Math.random() < convMy) {
       simData.homeScore++;
       document.getElementById('sim-score-home').innerText = simData.homeScore;
       appendSimEvent(`⚽ <b>${p1}</b> décale <b>${p2}</b> d'une passe lumineuse... Frappe sèche et imparable ! BUUUUT !`, 'goal');
@@ -1930,8 +1947,8 @@ function runMatchTick() {
       let baseComment = matchCommentaries[Math.floor(Math.random() * matchCommentaries.length)];
       appendSimEvent(`🔥 Action offensive de ${p1} : ${baseComment}`);
     }
-  } else if (chance > 65 - (diff * 0.5)) {
-    if (Math.random() > 0.65) {
+  } else if (r < pMy + pOpp) {
+    if (Math.random() < convOpp) {
       simData.awayScore++;
       document.getElementById('sim-score-away').innerText = simData.awayScore;
       appendSimEvent(`❌ But de l'adversaire suite à un contre éclair... ${simData.homeScore} - ${simData.awayScore}`, 'away-goal');
