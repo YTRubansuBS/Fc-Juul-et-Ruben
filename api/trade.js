@@ -9,7 +9,7 @@ function getDb() {
   return admin.firestore();
 }
 
-const ONLINE_WINDOW_MS = 45000;
+const ONLINE_WINDOW_MS = 90000;
 const COUNTDOWN_MS = 5000;
 
 async function checkAuth(db, id, password) {
@@ -28,7 +28,19 @@ module.exports = async (req, res) => {
     const db = getDb();
 
     if (req.method === 'GET') {
-      const { tradeId } = req.query;
+      const { action, id, tradeId } = req.query;
+
+      if (action === 'pending') {
+        if (!id) return res.status(400).json({ error: 'ID requis.' });
+        const snap = await db.collection('trades').where('users', 'array-contains', id).get();
+        const list = [];
+        snap.forEach(d => {
+          const data = d.data();
+          if (data.status === 'pending_accept' && data.users[1] === id) list.push({ id: d.id, from: data.users[0] });
+        });
+        return res.status(200).json(list);
+      }
+
       if (!tradeId) return res.status(400).json({ error: 'tradeId requis.' });
       const snap = await db.collection('trades').doc(tradeId).get();
       if (!snap.exists) return res.status(404).json({ error: 'Échange introuvable.' });
@@ -62,7 +74,7 @@ module.exports = async (req, res) => {
         users: [id, target],
         offers: { [id]: emptyOffer(), [target]: emptyOffer() },
         messages: [],
-        status: 'active',
+        status: 'pending_accept',
         countdownEndsAt: null,
         createdAt: Date.now()
       };
@@ -73,6 +85,21 @@ module.exports = async (req, res) => {
     const { tradeId } = body;
     if (!tradeId) return res.status(400).json({ error: 'tradeId requis.' });
     const tradeRef = db.collection('trades').doc(tradeId);
+
+    if (action === 'respond') {
+      const { accept } = body;
+      const result = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(tradeRef);
+        if (!snap.exists) throw new Error('Échange introuvable.');
+        const trade = snap.data();
+        if (trade.users[1] !== id) throw new Error("Vous n'êtes pas invité à cet échange.");
+        if (trade.status !== 'pending_accept') throw new Error("Cette invitation n'est plus valide.");
+        trade.status = accept ? 'active' : 'declined';
+        tx.set(tradeRef, trade);
+        return trade;
+      });
+      return res.status(200).json({ id: tradeId, ...result });
+    }
 
     if (action === 'offer') {
       const { cards, gems } = body;
