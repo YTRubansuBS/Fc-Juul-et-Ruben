@@ -95,14 +95,26 @@ nav button.active-nav, nav button:hover { background-color: var(--accent); color
 .sim-event.goal { border-left-color: #f1c40f; background: rgba(241, 196, 15, 0.15); font-weight: bold; color: #f1c40f; }
 .sim-event.away-goal { border-left-color: #e74c3c; background: rgba(231, 76, 60, 0.15); font-weight: bold; color: #ff6b6b; }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <b>
 
-<div id="login-screen" class="screen">
+<div id="mode-select-screen" class="screen" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: url('https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=1000&auto=format&fit=crop') center/cover; z-index: 9999;">
+  <div class="login-box" style="max-width: 440px;">
+    <h1>Mon FC Mobile</h1>
+    <p style="margin: 5px 0;">Choisis ton mode de jeu :</p>
+    <p style="text-align: left; font-size: 0.85rem; color: #ddd; line-height: 1.5;">
+      <b style="color:#00d2d3;">🌐 En ligne (Firestore)</b> — tout est identique au mode local, mais ta progression est sauvegardée sur internet et accessible depuis n'importe quel appareil. C'est le seul mode qui donne accès aux <b>amis</b>, aux <b>matchs contre tes amis</b>, aux <b>échanges de cartes</b> et au <b>classement</b>.<br><br>
+      <b style="color:#f1c40f;">💾 Local</b> — exactement le même jeu (équipe, packs, matchs contre les équipes nationales), mais tout reste enregistré uniquement sur cet appareil et ce navigateur. Pas d'accès aux amis, aux matchs entre amis, aux échanges, ni au classement.
+    </p>
+    <button class="action-btn gold-btn" onclick="selectMode('online')" style="margin-top: 10px;">🌐 Jouer en ligne (Firestore)</button>
+    <button class="action-btn" style="background: #7f8c8d; margin-top: 10px;" onclick="selectMode('local')">💾 Jouer en local</button>
+  </div>
+</div>
+
+<div id="login-screen" class="screen" style="display: none;">
   <div class="login-box">
     <h1>Mon FC Mobile</h1>
-    <p>Connecte-toi ou joue en Invité</p>
+    <p id="login-mode-label">Connecte-toi ou joue en Invité</p>
     <input type="text" id="username-input" class="auth-input" placeholder="Identifiant (ID unique)">
     <input type="password" id="password-input" class="auth-input" placeholder="Mot de passe">
     <div class="auth-buttons">
@@ -112,6 +124,7 @@ nav button.active-nav, nav button:hover { background-color: var(--accent); color
     <p style="margin: 10px 0;">OU</p>
     <button class="action-btn gold-btn" onclick="loginGuest()">Jouer en tant qu'Invité</button>
     <button class="action-btn" style="background: #e74c3c; margin-top: 15px;" onclick="resetAllSaves()">Effacer les données</button>
+    <button class="action-btn" style="background: #34495e; margin-top: 10px;" onclick="backToModeSelect()">↩️ Changer de mode (local / en ligne)</button>
   </div>
 </div>
 
@@ -131,8 +144,8 @@ nav button.active-nav, nav button:hover { background-color: var(--accent); color
     <button onclick="switchTab('equipe', event)" class="active-nav">Équipe</button>
     <button onclick="switchTab('jouer', event)">Jouer</button>
     <button onclick="switchTab('boutique', event)">Boutique</button>
-    <button onclick="switchTab('classement', event)">Classement</button>
-    <button onclick="switchTab('amis', event)">Amis</button>
+    <button id="nav-classement-btn" onclick="switchTab('classement', event)">Classement</button>
+    <button id="nav-amis-btn" onclick="switchTab('amis', event)">Amis</button>
     <button id="admin-nav-btn" onclick="switchTab('admin', event)" style="display:none; background: #e74c3c; color: white;">Admin</button>
   </nav>
 
@@ -223,6 +236,11 @@ nav button.active-nav, nav button:hover { background-color: var(--accent); color
         <p>Récompense : 5000 💎</p>
         <button class="action-btn gold-btn" onclick="startTextMatch(97, 5000, 'France 🇫🇷')">Affronter</button>
       </div>
+      <div class="match-card" style="border: 2px solid #00d2d3;">
+        <h3>🇪🇸 Espagne (GÉN: 98)</h3>
+        <p>Récompense : 6000 💎</p>
+        <button class="action-btn gold-btn" onclick="startTextMatch(98, 6000, 'Espagne 🇪🇸')">Affronter</button>
+      </div>
     </div>
   </section>
 
@@ -250,8 +268,10 @@ nav button.active-nav, nav button:hover { background-color: var(--accent); color
   </section>
 
   <section id="classement" class="tab-content">
-    <h2>🏆 Leaderboard (Meilleurs GÉN Connectés)</h2>
-    <p>Classement basé sur la note générale (GÉN) des équipes connectées en temps réel.</p>
+    <h2>🏆 Leaderboard (Meilleurs GÉN)</h2>
+    <p>Classement basé sur la note générale (GÉN) des équipes.
+      <button class="action-btn" onclick="updateLeaderboard()" style="margin-left:10px;">🔄 Rafraîchir</button>
+    </p>
     <table class="lb-table">
       <thead>
         <tr>
@@ -326,6 +346,20 @@ nav button.active-nav, nav button:hover { background-color: var(--accent); color
     </div>
   </div>
 
+  <div id="match-bet-modal" class="modal hidden">
+    <div class="modal-content" style="max-width: 420px;">
+      <h2>💰 Mise avant le match</h2>
+      <p>Match contre <b id="bet-opponent-name"></b></p>
+      <p>Combien de gemmes veux-tu parier ? Le gagnant remporte les deux mises. En cas de match nul, chacun récupère la sienne.</p>
+      <input type="number" id="bet-gems-input" class="auth-input" value="0" min="0" style="max-width:200px;">
+      <div style="display:flex; gap:10px; margin-top:15px; flex-wrap:wrap;">
+        <button class="action-btn gold-btn" id="bet-lock-btn" style="flex:1;" onclick="submitBet()">💰 Parier et jouer</button>
+        <button class="action-btn" id="bet-nobet-btn" style="flex:1;" onclick="submitNoBet()">Ne rien parier</button>
+      </div>
+      <p id="bet-status-line" style="color:#f1c40f; font-weight:bold; margin-top:10px;"></p>
+    </div>
+  </div>
+
   <div id="trade-modal" class="modal hidden full-screen-modal">
     <div class="modal-content full-screen-content" style="max-width: 900px;">
       <div class="inventory-header">
@@ -368,7 +402,7 @@ nav button.active-nav, nav button:hover { background-color: var(--accent); color
     <div style="font-weight: bold; color: #f1c40f;">Mode Plein Écran Actif ⚡</div>
   </div>
   <div class="match-header">
-    <div class="team-info">Mon Équipe<br>(GÉN: <span id="sim-my-ovr">0</span>)</div>
+    <div class="team-info" id="sim-me-name">Mon Équipe<br>(GÉN: <span id="sim-my-ovr">0</span>)</div>
     <div class="match-score">
       <span id="sim-score-home">0</span> - <span id="sim-score-away">0</span>
       <div class="match-time"><span id="sim-clock">0</span>'</div>
@@ -392,12 +426,6 @@ nav button.active-nav, nav button:hover { background-color: var(--accent); color
          L'appareil de l'utilisateur ne contacte plus jamais googleapis.com directement. -->
 
 <script>
-// ============================================================
-// CONFIGURATION SUPABASE
-// ============================================================
-const SUPABASE_URL = "https://wfdljmrvqnxhxqbgcctb.supabase.co/rest/v1/";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmZGxqbXJ2cW54aHhxYmdjY3RiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MDA1NDcsImV4cCI6MjEwNDI3NjU0N30.zb-Lr_FNra1K92v8BCaPvllIUmRXBe3onb8sEIWosF8";
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUser = null, isGuest = true, gems = 0, inventory = [], teamIdCounter = 0, packCooldown = false, activeTimeouts = [];
 let currentFormation = '433';
 let pitch = {}; 
@@ -413,144 +441,144 @@ let pity95 = 0;
 let pity98 = 0;
 
 // BASE DE DONNÉES COMPLÈTE
-  const database = [
-    // --- SUISSE ---
-    { name: "Elvedi", rating: 78, position: "CB", nation: "Suisse", club: "Borussia Mönchengladbach", image: "https://i.postimg.cc/7ZJY0NYp/IMG-0796.gif" },
-    { name: "Muheim", rating: 75, position: "LB/RB", nation: "Suisse", club: "Hambourg", image: "https://i.postimg.cc/635dZBHC/IMG-0809.gif" },
-    { name: "Sommer", rating: 84, position: "GK", nation: "Suisse", club: "Club de Bruges", image: "https://i.postimg.cc/MTKyBzsR/IMG-0808.gif" },
-    { name: "Akanji", rating: 83, position: "CB", nation: "Suisse", club: "Inter de Milan", image: "https://i.postimg.cc/GtgdqxJz/IMG-0785.gif" },
-    { name: "Ndoye", rating: 77, position: "RW/ST", nation: "Suisse", club: "Nottingham Forest", image: "https://i.postimg.cc/Bb74MBcC/IMG-0792.gif" },
-    { name: "Embolo", rating: 77, position: "ST", nation: "Suisse", club: "Rennes", image: "https://i.postimg.cc/Zn5J8M3g/IMG-0793.gif" },
-    { name: "Vargas", rating: 78, position: "LW", nation: "Suisse", club: "Séville", image: "https://i.postimg.cc/RhZv7Dfp/IMG-0794.gif" },
-    { name: "Manzambi", rating: 80, position: "CM", nation: "Suisse", club: "Aston Villa", image: "https://i.postimg.cc/4yxX6StP/IMG-0795.gif" },
-    { name: "Zakaria", rating: 81, position: "CB/CDM", nation: "Suisse", club: "Monaco", image: "https://i.postimg.cc/SRxm6v8r/IMG-0797.gif" },
-    { name: "Kobel", rating: 87, position: "GK", nation: "Suisse", club: "Borussia Dortmund", image: "https://i.postimg.cc/NFjQ6zTb/IMG-0798.gif" },
-    { name: "Xhaka", rating: 85, position: "CDM/CM", nation: "Suisse", club: "Sunderland", image: "https://i.postimg.cc/C5xwGQDk/IMG-0799.gif" },
-    { name: "Schär", rating: 81, position: "CB/CDM", nation: "Suisse", club: "Newcastle", image: "https://i.postimg.cc/NGKXvJZr/IMG-0801.gif" },
-    { name: "Jashari", rating: 76, position: "CDM/CM", nation: "Suisse", club: "Milano", image: "https://i.postimg.cc/ryD42n7r/IMG-0803.gif" },
-    { name: "Okafor", rating: 77, position: "ST", nation: "Suisse", club: "Milano", image: "https://i.postimg.cc/bJNQnq6x/IMG-0807.gif" },
+const database = [
+  // --- SUISSE 🇨🇭 ---
+  { name: 'Elvedi', gen: 78, pos: 'CB', nation: 'Suisse', club: 'Borrusia Monchengladbach', image: 'https://i.postimg.cc/7ZJY0NYp/IMG-0796.gif' },
+  { name: 'Muheim', gen: 75, pos: 'LB/RB', nation: 'Suisse', club: 'Hambourg', image: 'https://i.postimg.cc/635dZBHC/IMG-0809.gif' },
+  { name: 'Sommer', gen: 84, pos: 'GK', nation: 'Suisse', club: 'Club de Bruge', image: 'https://i.postimg.cc/MTKyBzsR/IMG-0808.gif' },
+  { name: 'Akanji', gen: 83, pos: 'CB', nation: 'Suisse', club: 'Inter de Milan', image: 'https://i.postimg.cc/GtgdqxJz/IMG-0785.gif' },
+  { name: 'Ndoye', gen: 77, pos: 'RW/ST', nation: 'Suisse', club: 'Nottingham Forest', image: 'https://i.postimg.cc/Bb74MBcC/IMG-0792.gif' },
+  { name: 'Embolo', gen: 77, pos: 'ST', nation: 'Suisse', club: 'Rennes', image: 'https://i.postimg.cc/Zn5J8M3g/IMG-0793.gif' },
+  { name: 'Vargas', gen: 78, pos: 'LW', nation: 'Suisse', club: 'Seville', image: 'https://i.postimg.cc/RhZv7Dfp/IMG-0794.gif' },
+  { name: 'Manzambi', gen: 80, pos: 'CM', nation: 'Suisse', club: 'Aston Villa', image: 'https://i.postimg.cc/4yxX6StP/IMG-0795.gif' },
+  { name: 'Zakaria', gen: 81, pos: 'CB/CDM', nation: 'Suisse', club: 'Monaco', image: 'https://i.postimg.cc/SRxm6v8r/IMG-0797.gif' },
+  { name: 'Kobel', gen: 87, pos: 'GK', nation: 'Suisse', club: 'Borrusia Dortmund', image: 'https://i.postimg.cc/NFjQ6zTb/IMG-0798.gif' },
+  { name: 'Xhaka', gen: 85, pos: 'CDM/CM', nation: 'Suisse', club: 'Sunderland', image: 'https://i.postimg.cc/C5xwGQDk/IMG-0799.gif' },
+  { name: 'Schär', gen: 81, pos: 'CB/CDM', nation: 'Suisse', club: 'Newcastle', image: 'https://i.postimg.cc/NGKXvJZr/IMG-0801.gif' },
+  { name: 'Jashari', gen: 76, pos: 'CDM/CM', nation: 'Suisse', club: 'Milano', image: 'https://i.postimg.cc/ryD42n7r/IMG-0803.gif' },
+  { name: 'Okafor', gen: 77, pos: 'ST', nation: 'Suisse', club: 'Milano', image: 'https://i.postimg.cc/bJNQnq6x/IMG-0807.gif' },
 
-    // --- ALLEMAGNE ---
-    { name: "Kimmich", rating: 94, position: "CDM/DD", nation: "Allemagne", club: "Bayern München", image: "https://i.postimg.cc/CLzHxMtB/IMG-0815.gif" },
-    { name: "Neuer", rating: 93, position: "GK", nation: "Allemagne", club: "Bayern München", image: "https://i.postimg.cc/4d27DVJy/IMG-0814.gif" },
-    { name: "Tah", rating: 92, position: "CB", nation: "Allemagne", club: "Bayern München", image: "https://i.postimg.cc/j53cMDmh/IMG-0821.gif" },
-    { name: "Rüdiger", rating: 91, position: "CB", nation: "Allemagne", club: "Real Madrid", image: "https://i.postimg.cc/kgNyk1LM/IMG-0819.gif" },
-    { name: "Musiala", rating: 94, position: "CAM", nation: "Allemagne", club: "Bayern München", image: "https://i.postimg.cc/xdTFgVqn/IMG-0820.gif" },
-    { name: "Pavlovic", rating: 90, position: "CDM", nation: "Allemagne", club: "Bayern München", image: "https://i.postimg.cc/s2mCDJQL/IMG-0826.gif" },
-    { name: "Raum", rating: 89, position: "LB", nation: "Allemagne", club: "RB Leipzig", image: "https://i.postimg.cc/QtNspzZZ/IMG-0825.gif" },
-    { name: "Woltemade", rating: 91, position: "ST", nation: "Allemagne", club: "Newcastle", image: "https://i.postimg.cc/hvdSjdqp/IMG-0830.gif" },
-    { name: "Thiaw", rating: 88, position: "RB", nation: "Allemagne", club: "Newcastle", image: "https://i.postimg.cc/Qxc8Z1bz/IMG-0828.gif" },
-    { name: "Wirtz", rating: 93, position: "LW/CAM", nation: "Allemagne", club: "Liverpool", image: "https://i.postimg.cc/tJYszJGR/IMG-0835.gif" },
-    { name: "Undav", rating: 90, position: "ST", nation: "Allemagne", club: "Stuttgart", image: "https://i.postimg.cc/sXz8SGSS/IMG-0844.gif" },
-    { name: "Schlotterbeck", rating: 92, position: "CB", nation: "Allemagne", club: "Borussia Dortmund", image: "https://i.postimg.cc/tg3vXRfW/IMG-0837.gif" },
-    { name: "Karl", rating: 89, position: "CM", nation: "Allemagne", club: "Bayern München", image: "https://i.postimg.cc/h4yy45C7/IMG-0842.gif" },
-    { name: "Ter Stegen", rating: 91, position: "GK", nation: "Allemagne", club: "Girona", image: "https://i.postimg.cc/rpNjBn0F/IMG-0840.gif" },
-    { name: "Sané", rating: 90, position: "RW", nation: "Allemagne", club: "Galatasaray", image: "https://i.postimg.cc/CMXXYKLJ/IMG-0846.gif" },
-    { name: "Schweinsteiger", rating: 96, position: "CM/CAM/CDM", nation: "Allemagne", club: "Icône", image: "https://i.postimg.cc/ZK9mFg0w/IMG-0851.gif" },
-    { name: "Lahm", rating: 96, position: "LB/RB/CDM", nation: "Allemagne", club: "Icône", image: "https://i.postimg.cc/7hdpWHb5/IMG-0849.gif" },
-    { name: "Beckenbauer", rating: 97, position: "CB", nation: "Allemagne", club: "Icône", image: "https://i.postimg.cc/d3DKvqhj/IMG-0942.gif" },
+  // --- ALLEMAGNE 🇩🇪 ---
+  { name: 'Kimmich', gen: 94, pos: 'CDM/RB', nation: 'Allemagne', club: 'Bayern Munchen', image: 'https://i.postimg.cc/CLzHxMtB/IMG-0815.gif' },
+  { name: 'Neuer', gen: 93, pos: 'GK', nation: 'Allemagne', club: 'Bayern Munchen', image: 'https://i.postimg.cc/4d27DVJy/IMG-0814.gif' },
+  { name: 'Tah', gen: 92, pos: 'CB', nation: 'Allemagne', club: 'Bayern Munchen', image: 'https://i.postimg.cc/j53cMDmh/IMG-0821.gif' },
+  { name: 'Rüdiger', gen: 91, pos: 'CB', nation: 'Allemagne', club: 'Real Madrid', image: 'https://i.postimg.cc/kgNyk1LM/IMG-0819.gif' },
+  { name: 'Musiala', gen: 94, pos: 'CAM', nation: 'Allemagne', club: 'Bayern Munchen', image: 'https://i.postimg.cc/xdTFgVqn/IMG-0820.gif' },
+  { name: 'Pavlovic', gen: 90, pos: 'CDM', nation: 'Allemagne', club: 'Bayern Munchen', image: 'https://i.postimg.cc/s2mCDJQL/IMG-0826.gif' },
+  { name: 'Raum', gen: 89, pos: 'LB', nation: 'Allemagne', club: 'RB Leipzig', image: 'https://i.postimg.cc/QtNspzZZ/IMG-0825.gif' },
+  { name: 'Woltemade', gen: 91, pos: 'ST', nation: 'Allemagne', club: 'Newcastle', image: 'https://i.postimg.cc/hvdSjdqp/IMG-0830.gif' },
+  { name: 'Thiaw', gen: 88, pos: 'RB', nation: 'Allemagne', club: 'Newcastle', image: 'https://i.postimg.cc/Qxc8Z1bz/IMG-0828.gif' },
+  { name: 'Wirtz', gen: 93, pos: 'LW/CAM', nation: 'Allemagne', club: 'Liverpool', image: 'https://i.postimg.cc/tJYszJGR/IMG-0835.gif' },
+  { name: 'Undav', gen: 90, pos: 'ST', nation: 'Allemagne', club: 'Sttutgart', image: 'https://i.postimg.cc/sXz8SGSS/IMG-0844.gif' },
+  { name: 'Schlotterbeck', gen: 92, pos: 'CB', nation: 'Allemagne', club: 'Borussia Dortmund', image: 'https://i.postimg.cc/tg3vXRfW/IMG-0837.gif' },
+  { name: 'Karl', gen: 89, pos: 'CM', nation: 'Allemagne', club: 'Bayern Munchen', image: 'https://i.postimg.cc/h4yy45C7/IMG-0842.gif' },
+  { name: 'Ter Stegen', gen: 91, pos: 'GK', nation: 'Allemagne', club: 'Girona', image: 'https://i.postimg.cc/rpNjBn0F/IMG-0840.gif' },
+  { name: 'Sané', gen: 90, pos: 'RW', nation: 'Allemagne', club: 'Galatasaray', image: 'https://i.postimg.cc/CMXXYKLJ/IMG-0846.gif' },
+  { name: 'Schweinsteiger', gen: 96, pos: 'CM/CAM/CDM', nation: 'Allemagne', club: 'Icone', image: 'https://i.postimg.cc/ZK9mFg0w/IMG-0851.gif' },
+  { name: 'Lahm', gen: 96, pos: 'LB/RB/CDM', nation: 'Allemagne', club: 'Icone', image: 'https://i.postimg.cc/7hdpWHb5/IMG-0849.gif' },
+  { name: 'Beckenbauer', gen: 97, pos: 'CB', nation: 'Allemagne', club: 'Icone', image: 'https://i.postimg.cc/d3DKvqhj/IMG-0942.gif' },
 
-    // --- AFRIQUE DU SUD ---
-    { name: "Williams", rating: 73, position: "GK", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/zvnbs2pG/IMG-0857.gif" },
-    { name: "Mvala", rating: 69, position: "CB", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/t4mTMHy5/IMG-0861.gif" },
-    { name: "Mbokazi", rating: 72, position: "CB", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/J4p4sWs9/IMG-0858.gif" },
-    { name: "Hlongwane", rating: 68, position: "RB", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/j5hYBzP7/IMG-0859.gif" },
-    { name: "Makopa", rating: 70, position: "ST", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/L4Nn1P7C/IMG-0864.gif" },
-    { name: "Appollis", rating: 75, position: "LW", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/nh3LB60D/IMG-0866.gif" },
-    { name: "Tshabalala", rating: 88, position: "CAM", nation: "Afrique du Sud", club: "Icône", image: "https://i.postimg.cc/xjGnLwdk/IMG-0869.gif" },
-    { name: "Mudau", rating: 71, position: "LB", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/HLmt88vZ/IMG-0872.gif" },
-    { name: "Sithole", rating: 68, position: "CM", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/jS0HBJTT/IMG-0873.gif" },
-    { name: "Mokoena", rating: 72, position: "CM", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/kMk937h0/IMG-0875.gif" },
-    { name: "McCarthy", rating: 88, position: "ST", nation: "Afrique du Sud", club: "Icône", image: "https://i.postimg.cc/jd4szGZX/IMG-0877.gif" },
-    { name: "Campbell", rating: 65, position: "RW", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/d3KYCBCp/IMG-0882.gif" },
-    { name: "Sibisi", rating: 69, position: "CB", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/zX7rLTfv/IMG-0881.gif" },
-    { name: "Chaine", rating: 71, position: "GK", nation: "Afrique du Sud", club: "Afrique du Sud", image: "https://i.postimg.cc/RZJgrzyb/IMG-0884.gif" },
+  // --- AFRIQUE DU SUD 🇿🇦 ---
+  { name: 'Williams', gen: 73, pos: 'GK', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/zvnbs2pG/IMG-0857.gif' },
+  { name: 'Mvala', gen: 69, pos: 'CB', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/t4mTMHy5/IMG-0861.gif' },
+  { name: 'Mbokazi', gen: 72, pos: 'CB', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/J4p4sWs9/IMG-0858.gif' },
+  { name: 'Hlongwane', gen: 68, pos: 'RB', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/j5hYBzP7/IMG-0859.gif' },
+  { name: 'Makopa', gen: 70, pos: 'ST', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/L4Nn1P7C/IMG-0864.gif' },
+  { name: 'Appollis', gen: 75, pos: 'LW', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/nh3LB60D/IMG-0866.gif' },
+  { name: 'Tshabalala', gen: 88, pos: 'CAM', nation: 'Afrique du Sud', club: 'Icone', image: 'https://i.postimg.cc/xjGnLwdk/IMG-0869.gif' },
+  { name: 'Mudau', gen: 71, pos: 'LB', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/HLmt88vZ/IMG-0872.gif' },
+  { name: 'Sithole', gen: 68, pos: 'CM', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/jS0HBJTT/IMG-0873.gif' },
+  { name: 'Mokoena', gen: 72, pos: 'CM', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/kMk937h0/IMG-0875.gif' },
+  { name: 'Mccarthy', gen: 88, pos: 'ST', nation: 'Afrique du Sud', club: 'Icone', image: 'https://i.postimg.cc/jd4szGZX/IMG-0877.gif' },
+  { name: 'Campbell', gen: 65, pos: 'RW', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/d3KYCBCp/IMG-0882.gif' },
+  { name: 'Sibisi', gen: 69, pos: 'CB', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/zX7rLTfv/IMG-0881.gif' },
+  { name: 'Chaine', gen: 71, pos: 'GK', nation: 'Afrique du Sud', club: 'Afrique du Sud', image: 'https://i.postimg.cc/RZJgrzyb/IMG-0884.gif' },
 
-    // --- NORVÈGE ---
-    { name: "Haaland", rating: 99, position: "ST", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/fWvs9r7h/IMG-0928.gif" },
-    { name: "Riise", rating: 90, position: "LB", nation: "Norvège", club: "Icône", image: "https://i.postimg.cc/qR91vJSr/IMG-0911.gif" },
-    { name: "Solskjaer", rating: 90, position: "ST", nation: "Norvège", club: "Icône", image: "https://i.postimg.cc/7Y1KqyNz/IMG-0912.gif" },
-    { name: "Odegaard", rating: 92, position: "CM/CDM", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/Bvbp5Pfg/IMG-0900.gif" },
-    { name: "Wolfe", rating: 81, position: "LB", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/XJygmMJF/IMG-0908.gif" },
-    { name: "Ostigard", rating: 83, position: "CB", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/7Y4NsWyQ/IMG-0904.gif" },
-    { name: "Schjelderup", rating: 82, position: "CM", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/Dwjdzf4J/IMG-0906.gif" },
-    { name: "Ajer", rating: 84, position: "CB", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/9fDPw3GW/IMG-0896.gif" },
-    { name: "Nusa", rating: 85, position: "LW/RW", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/Fz4067wv/IMG-0895.gif" },
-    { name: "Bobb", rating: 84, position: "RW/RM", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/44669Qhn/IMG-0894.gif" },
-    { name: "Sorloth", rating: 87, position: "ST", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/BQJxcPxh/IMG-0897.gif" },
-    { name: "Berge", rating: 85, position: "CDM", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/GpTYhF1W/IMG-0898.gif" },
-    { name: "Ryerson", rating: 87, position: "RB", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/wvhmD93q/IMG-0899.gif" },
-    { name: "Nyland", rating: 86, position: "GK", nation: "Norvège", club: "Norvège", image: "https://i.postimg.cc/XqLBDxwT/IMG-0901.gif" },
+  // --- NORVÈGE 🇳🇴 ---
+  { name: 'Haaland', gen: 99, pos: 'ST', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/fWvs9r7h/IMG-0928.gif' },
+  { name: 'Riise', gen: 90, pos: 'LB', nation: 'Norvège', club: 'Icone', image: 'https://i.postimg.cc/qR91vJSr/IMG-0911.gif' },
+  { name: 'Solskjaer', gen: 90, pos: 'ST', nation: 'Norvège', club: 'Icone', image: 'https://i.postimg.cc/7Y1KqyNz/IMG-0912.gif' },
+  { name: 'Odegaard', gen: 92, pos: 'CM/CDM', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/Bvbp5Pfg/IMG-0900.gif' },
+  { name: 'Wolfe', gen: 81, pos: 'LB', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/XJygmMJF/IMG-0908.gif' },
+  { name: 'Ostigard', gen: 83, pos: 'CB', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/7Y4NsWyQ/IMG-0904.gif' },
+  { name: 'Schjelderup', gen: 82, pos: 'CM', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/Dwjdzf4J/IMG-0906.gif' },
+  { name: 'Ajer', gen: 84, pos: 'CB', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/9fDPw3GW/IMG-0896.gif' },
+  { name: 'Nusa', gen: 85, pos: 'LW/RW', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/Fz4067wv/IMG-0895.gif' },
+  { name: 'Bobb', gen: 84, pos: 'RW/RM', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/44669Qhn/IMG-0894.gif' },
+  { name: 'Sorloth', gen: 87, pos: 'ST', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/BQJxcPxh/IMG-0897.gif' },
+  { name: 'Berge', gen: 85, pos: 'CDM', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/GpTYhF1W/IMG-0898.gif' },
+  { name: 'Ryerson', gen: 87, pos: 'RB', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/wvhmD93q/IMG-0899.gif' },
+  { name: 'Nyland', gen: 86, pos: 'GK', nation: 'Norvège', club: 'Norvège', image: 'https://i.postimg.cc/XqLBDxwT/IMG-0901.gif' },
 
-    // --- BRÉSIL ---
-    { name: "Neymar", rating: 99, position: "LW/CAM", nation: "Brésil", club: "Icône", image: "https://i.postimg.cc/90vTYQZV/IMG-0930.gif" },
-    { name: "Bremer", rating: 86, position: "CB", nation: "Brésil", club: "Brésil", image: "https://i.postimg.cc/XY6dZXnh/IMG-0935.gif" },
-    { name: "Marquinhos", rating: 89, position: "CB", nation: "Brésil", club: "Brésil", image: "https://i.postimg.cc/k5fbhcKh/IMG-0937.gif" },
-    { name: "Alisson", rating: 90, position: "GK", nation: "Brésil", club: "Brésil", image: "https://i.postimg.cc/mr2wDhS6/IMG-0938.gif" },
-    { name: "Guimaraes", rating: 87, position: "CAM", nation: "Brésil", club: "Brésil", image: "https://i.postimg.cc/VvM9TtYN/IMG-0936.gif" },
-    { name: "Gabriel", rating: 94, position: "CB", nation: "Brésil", club: "Brésil", image: "https://i.postimg.cc/hPLb1VZg/IMG-0939.gif" },
-    { name: "Vinicius Jr.", rating: 95, position: "LM/LW", nation: "Brésil", club: "Brésil", image: "https://i.postimg.cc/JnHjDXHv/IMG-0940.gif" },
-    { name: "Cafú", rating: 96, position: "RB", nation: "Brésil", club: "Icône", image: "https://i.postimg.cc/wTQLmgMC/IMG-0934.gif" },
-    { name: "Pelé", rating: 100, position: "ST", nation: "Brésil", club: "Icône", image: "https://i.postimg.cc/6QyvgZ0D/IMG-0933.gif" },
-    { name: "R9", rating: 98, position: "ST", nation: "Brésil", club: "Icône", image: "https://i.postimg.cc/k4StXdLy/IMG-0929.gif" },
-    { name: "Santos", rating: 83, position: "LB", nation: "Brésil", club: "Brésil", image: "https://i.postimg.cc/VLg0NgZH/IMG-0944.gif" },
-    { name: "Danilo", rating: 82, position: "RB", nation: "Brésil", club: "Brésil", image: "https://i.postimg.cc/TPLKC628/IMG-0946.gif" },
-    { name: "Kaka", rating: 97, position: "CM/CAM", nation: "Brésil", club: "Icône", image: "https://i.postimg.cc/QCsV8KQZ/IMG-0949.gif" },
-    { name: "Paqueta", rating: 83, position: "CM/CAM", nation: "Brésil", club: "Brésil", image: "https://i.postimg.cc/pVYp0kvD/IMG-0951.gif" },
-    { name: "Raphinha", rating: 86, position: "RW", nation: "Brésil", club: "Brésil", image: "https://i.postimg.cc/Z50n5SdH/IMG-0953.gif" },
+  // --- BRÉSIL 🇧🇷 ---
+  { name: 'Neymar', gen: 99, pos: 'LW/CAM', nation: 'Brésil', club: 'Icone', image: 'https://i.postimg.cc/90vTYQZV/IMG-0930.gif' },
+  { name: 'Bremer', gen: 86, pos: 'CB', nation: 'Brésil', club: 'Brésil', image: 'https://i.postimg.cc/XY6dZXnh/IMG-0935.gif' },
+  { name: 'Marquinhos', gen: 89, pos: 'CB', nation: 'Brésil', club: 'Brésil', image: 'https://i.postimg.cc/k5fbhcKh/IMG-0937.gif' },
+  { name: 'Alisson', gen: 90, pos: 'GK', nation: 'Brésil', club: 'Brésil', image: 'https://i.postimg.cc/mr2wDhS6/IMG-0938.gif' },
+  { name: 'Guimaraes', gen: 87, pos: 'CAM', nation: 'Brésil', club: 'Brésil', image: 'https://i.postimg.cc/VvM9TtYN/IMG-0936.gif' },
+  { name: 'Gabriel', gen: 94, pos: 'CB', nation: 'Brésil', club: 'Brésil', image: 'https://i.postimg.cc/hPLb1VZg/IMG-0939.gif' },
+  { name: 'Vinicius Jr.', gen: 95, pos: 'LM/LW', nation: 'Brésil', club: 'Brésil', image: 'https://i.postimg.cc/JnHjDXHv/IMG-0940.gif' },
+  { name: 'Cafú', gen: 96, pos: 'RB', nation: 'Brésil', club: 'Icone', image: 'https://i.postimg.cc/wTQLmgMC/IMG-0934.gif' },
+  { name: 'Pele', gen: 100, pos: 'ST', nation: 'Brésil', club: 'Icone', image: 'https://i.postimg.cc/6QyvgZ0D/IMG-0933.gif' },
+  { name: 'R9', gen: 98, pos: 'ST', nation: 'Brésil', club: 'Icone', image: 'https://i.postimg.cc/k4StXdLy/IMG-0929.gif' },
+  { name: 'Santos', gen: 83, pos: 'LB', nation: 'Brésil', club: 'Brésil', image: 'https://i.postimg.cc/VLg0NgZH/IMG-0944.gif' },
+  { name: 'Danilo', gen: 82, pos: 'RB', nation: 'Brésil', club: 'Brésil', image: 'https://i.postimg.cc/TPLKC628/IMG-0946.gif' },
+  { name: 'Kaka', gen: 97, pos: 'CM/CAM', nation: 'Brésil', club: 'Icone', image: 'https://i.postimg.cc/QCsV8KQZ/IMG-0949.gif' },
+  { name: 'Paqueta', gen: 83, pos: 'CM/CAM', nation: 'Brésil', club: 'Brésil', image: 'https://i.postimg.cc/pVYp0kvD/IMG-0951.gif' },
+  { name: 'Raphina', gen: 86, pos: 'RW', nation: 'Brésil', club: 'Brésil', image: 'https://i.postimg.cc/Z50n5SdH/IMG-0953.gif' },
 
-    // --- FRANCE ---
-    { name: "Mbappé", rating: 99, position: "ST", nation: "France", club: "France", image: "https://i.postimg.cc/hPxYHCsk/IMG-0955.gif" },
-    { name: "Barthez", rating: 97, position: "GK", nation: "France", club: "Icône", image: "https://i.postimg.cc/yN6r37KK/IMG-0957.gif" },
-    { name: "Upamecano", rating: 94, position: "CB", nation: "France", club: "France", image: "https://i.postimg.cc/W4DgHy6J/IMG-0960.gif" },
-    { name: "Zidane", rating: 99, position: "CAM", nation: "France", club: "Icône", image: "https://i.postimg.cc/R0nJRHv4/IMG-0932.gif" },
-    { name: "Doué", rating: 96, position: "RW/LW/CM", nation: "France", club: "France", image: "https://i.postimg.cc/fRP0mKnz/IMG-0962.gif" },
-    { name: "Blanc", rating: 97, position: "CB", nation: "France", club: "Icône", image: "https://i.postimg.cc/zBCbmYLd/IMG-0963.gif" },
-    { name: "Olise", rating: 97, position: "CAM/RW", nation: "France", club: "France", image: "https://i.postimg.cc/7hX561nw/IMG-0966.gif" },
-    { name: "Rabiot", rating: 93, position: "CDM/CM", nation: "France", club: "France", image: "https://i.postimg.cc/NffynVQQ/IMG-0971.gif" },
-    { name: "Makélélé", rating: 97, position: "CDM/CM", nation: "France", club: "Icône", image: "https://i.postimg.cc/XYrrjCGW/IMG-0972.gif" },
-    { name: "Saliba", rating: 94, position: "CB", nation: "France", club: "France", image: "https://i.postimg.cc/RZ2NNZK8/IMG-0975.gif" },
-    { name: "Hernandez", rating: 94, position: "LB", nation: "France", club: "France", image: "https://i.postimg.cc/3RFRSj61/IMG-0977.gif" },
-    { name: "Koundé", rating: 95, position: "RB", nation: "France", club: "France", image: "https://i.postimg.cc/c1TCfmf8/IMG-0979.gif" },
-    { name: "Dembélé", rating: 94, position: "ST/LW", nation: "France", club: "France", image: "https://i.postimg.cc/Jhb40c1V/IMG-0980.gif" },
-    { name: "Thuram", rating: 98, position: "RB", nation: "France", club: "Icône", image: "https://i.postimg.cc/7hLxKF0c/IMG-0982.gif" },
-    { name: "Barcola", rating: 92, position: "LW", nation: "France", club: "France", image: "https://i.postimg.cc/CLzhkVFG/IMG-0986.gif" },
-    { name: "Cherki", rating: 90, position: "CAM", nation: "France", club: "France", image: "https://i.postimg.cc/YqZpxy0q/IMG-0988.gif" },
-    { name: "Maignan", rating: 95, position: "GK", nation: "France", club: "France", image: "https://i.postimg.cc/yNXss1P3/IMG-0990.gif" },
+  // --- FRANCE 🇫🇷 ---
+  { name: 'Mbappé', gen: 99, pos: 'ST', nation: 'France', club: 'France', image: 'https://i.postimg.cc/hPxYHCsk/IMG-0955.gif' },
+  { name: 'Barthez', gen: 97, pos: 'GK', nation: 'France', club: 'Icone', image: 'https://i.postimg.cc/yN6r37KK/IMG-0957.gif' },
+  { name: 'Upamecano', gen: 94, pos: 'CB', nation: 'France', club: 'France', image: 'https://i.postimg.cc/W4DgHy6J/IMG-0960.gif' },
+  { name: 'Zidane', gen: 99, pos: 'CAM', nation: 'France', club: 'Icone', image: 'https://i.postimg.cc/R0nJRHv4/IMG-0932.gif' },
+  { name: 'Doué', gen: 96, pos: 'RW/LW/CM', nation: 'France', club: 'France', image: 'https://i.postimg.cc/fRP0mKnz/IMG-0962.gif' },
+  { name: 'Blanc', gen: 97, pos: 'CB', nation: 'France', club: 'Icone', image: 'https://i.postimg.cc/zBCbmYLd/IMG-0963.gif' },
+  { name: 'Olise', gen: 97, pos: 'CAM/RW', nation: 'France', club: 'France', image: 'https://i.postimg.cc/7hX561nw/IMG-0966.gif' },
+  { name: 'Rabiot', gen: 93, pos: 'CDM/CM', nation: 'France', club: 'France', image: 'https://i.postimg.cc/NffynVQQ/IMG-0971.gif' },
+  { name: 'Makélélé', gen: 97, pos: 'CDM/CM', nation: 'France', club: 'Icone', image: 'https://i.postimg.cc/XYrrjCGW/IMG-0972.gif' },
+  { name: 'Saliba', gen: 94, pos: 'CB', nation: 'France', club: 'France', image: 'https://i.postimg.cc/RZ2NNZK8/IMG-0975.gif' },
+  { name: 'Hernandez', gen: 94, pos: 'LB', nation: 'France', club: 'France', image: 'https://i.postimg.cc/3RFRSj61/IMG-0977.gif' },
+  { name: 'Kounde', gen: 95, pos: 'RB', nation: 'France', club: 'France', image: 'https://i.postimg.cc/c1TCfmf8/IMG-0979.gif' },
+  { name: 'Dembélé', gen: 94, pos: 'ST/LW', nation: 'France', club: 'France', image: 'https://i.postimg.cc/Jhb40c1V/IMG-0980.gif' },
+  { name: 'Thuram', gen: 98, pos: 'RB', nation: 'France', club: 'Icone', image: 'https://i.postimg.cc/7hLxKF0c/IMG-0982.gif' },
+  { name: 'Barcola', gen: 92, pos: 'LW', nation: 'France', club: 'France', image: 'https://i.postimg.cc/CLzhkVFG/IMG-0986.gif' },
+  { name: 'Cherki', gen: 90, pos: 'CAM', nation: 'France', club: 'France', image: 'https://i.postimg.cc/YqZpxy0q/IMG-0988.gif' },
+  { name: 'Maignan', gen: 95, pos: 'GK', nation: 'France', club: 'France', image: 'https://i.postimg.cc/yNXss1P3/IMG-0990.gif' },
 
-    // --- PORTUGAL ---
-    { name: "Ronaldo", rating: 99, position: "LW/ST", nation: "Portugal", club: "Icône", image: "https://i.postimg.cc/fR6NLFtk/IMG-0931.gif" },
-    { name: "Diogo Costa", rating: 92, position: "GK", nation: "Portugal", club: "Portugal", image: "https://i.postimg.cc/qRrHc3xZ/IMG-1002.gif" },
-    { name: "Joao Neves", rating: 94, position: "CM/RB", nation: "Portugal", club: "Portugal", image: "https://i.postimg.cc/x8xrSFVr/IMG-1003.gif" },
-    { name: "Figo", rating: 96, position: "RW", nation: "Portugal", club: "Icône", image: "https://i.postimg.cc/RVh5T9wt/IMG-1004.gif" },
-    { name: "Eusébio", rating: 98, position: "ST", nation: "Portugal", club: "Icône", image: "https://i.postimg.cc/R0rk9Hy3/IMG-1005.gif" },
-    { name: "Dias", rating: 94, position: "CB", nation: "Portugal", club: "Portugal", image: "https://i.postimg.cc/yxrGGg0y/IMG-1006.gif" },
-    { name: "Vitinha", rating: 95, position: "CM/CAM", nation: "Portugal", club: "Portugal", image: "https://i.postimg.cc/SsStN7r4/IMG-1007.gif" },
-    { name: "N. Mendes", rating: 95, position: "LB", nation: "Portugal", club: "Portugal", image: "https://i.postimg.cc/7hcB9vyP/IMG-1008.gif" },
-    { name: "Carvalho", rating: 94, position: "CB", nation: "Portugal", club: "Icône", image: "https://i.postimg.cc/HWPPdM7V/IMG-1010.gif" },
-    { name: "Leao", rating: 93, position: "LW", nation: "Portugal", club: "Portugal", image: "https://i.postimg.cc/CxbvG6rN/IMG-1011.gif" },
-    { name: "Cancelo", rating: 91, position: "RB", nation: "Portugal", club: "Portugal", image: "https://i.postimg.cc/V6Z4syvh/IMG-1012.gif" },
-    { name: "Rui Costa", rating: 92, position: "CM/CDM", nation: "Portugal", club: "Icône", image: "https://i.postimg.cc/XNhxT0Tp/IMG-1013.gif" },
-    { name: "Fernandes", rating: 95, position: "CAM/CM", nation: "Portugal", club: "Portugal", image: "https://i.postimg.cc/j51Q0zkV/IMG-1014.gif" },
-    { name: "Inacio", rating: 88, position: "CB", nation: "Portugal", club: "Portugal", image: "https://i.postimg.cc/Vs3pXMLQ/IMG-1018.gif" },
+  // --- PORTUGAL 🇵🇹 ---
+  { name: 'Ronaldo', gen: 99, pos: 'LW/ST', nation: 'Portugal', club: 'Icone', image: 'https://i.postimg.cc/fR6NLFtk/IMG-0931.gif' },
+  { name: 'Diogo Costa', gen: 92, pos: 'GK', nation: 'Portugal', club: 'Portugal', image: 'https://i.postimg.cc/qRrHc3xZ/IMG-1002.gif' },
+  { name: 'Joao Neves', gen: 94, pos: 'CM/RB', nation: 'Portugal', club: 'Portugal', image: 'https://i.postimg.cc/x8xrSFVr/IMG-1003.gif' },
+  { name: 'Figo', gen: 96, pos: 'RW', nation: 'Portugal', club: 'Icone', image: 'https://i.postimg.cc/RVh5T9wt/IMG-1004.gif' },
+  { name: 'Eusébio', gen: 98, pos: 'ST', nation: 'Portugal', club: 'Icone', image: 'https://i.postimg.cc/R0rk9Hy3/IMG-1005.gif' },
+  { name: 'Dias', gen: 94, pos: 'CB', nation: 'Portugal', club: 'Portugal', image: 'https://i.postimg.cc/yxrGGg0y/IMG-1006.gif' },
+  { name: 'Vitinha', gen: 95, pos: 'CM/CAM', nation: 'Portugal', club: 'Portugal', image: 'https://i.postimg.cc/SsStN7r4/IMG-1007.gif' },
+  { name: 'N.Mendes', gen: 95, pos: 'LB', nation: 'Portugal', club: 'Portugal', image: 'https://i.postimg.cc/7hcB9vyP/IMG-1008.gif' },
+  { name: 'Carvalho', gen: 94, pos: 'CB', nation: 'Portugal', club: 'Icone', image: 'https://i.postimg.cc/HWPPdM7V/IMG-1010.gif' },
+  { name: 'Leao', gen: 93, pos: 'LW', nation: 'Portugal', club: 'Portugal', image: 'https://i.postimg.cc/CxbvG6rN/IMG-1011.gif' },
+  { name: 'Cancelo', gen: 91, pos: 'RB', nation: 'Portugal', club: 'Portugal', image: 'https://i.postimg.cc/V6Z4syvh/IMG-1012.gif' },
+  { name: 'Rui Costa', gen: 92, pos: 'CM/CDM', nation: 'Portugal', club: 'Icone', image: 'https://i.postimg.cc/XNhxT0Tp/IMG-1013.gif' },
+  { name: 'Fernandes', gen: 95, pos: 'CAM/CM', nation: 'Portugal', club: 'Portugal', image: 'https://i.postimg.cc/j51Q0zkV/IMG-1014.gif' },
+  { name: 'Iniacio', gen: 88, pos: 'CB', nation: 'Portugal', club: 'Portugal', image: 'https://i.postimg.cc/Vs3pXMLQ/IMG-1018.gif' },
 
-    // --- ESPAGNE ---
-    { name: "Yeremy Pino", rating: 90, position: "RM/RW", nation: "Espagne", club: "Espagne", image: "https://i.postimg.cc/G34q6TfJ/IMG-1029.gif" },
-    { name: "Grimaldo", rating: 93, position: "LM/LW/LB", nation: "Espagne", club: "Espagne", image: "https://i.postimg.cc/vH9XZFbZ/IMG-1030.gif" },
-    { name: "Marcos Llorente", rating: 93, position: "RM/RB", nation: "Espagne", club: "Espagne", image: "https://i.postimg.cc/Vk8gSGkK/IMG-1031.gif" },
-    { name: "Ruiz", rating: 95, position: "CM", nation: "Espagne", club: "Espagne", image: "https://i.postimg.cc/pd0J6PYg/IMG-1032.gif" },
-    { name: "Rodri", rating: 98, position: "CDM/CM", nation: "Espagne", club: "Espagne", image: "https://i.postimg.cc/bJs9X4m2/IMG-1033.gif" },
-    { name: "Ferran Torres", rating: 95, position: "LW/ST", nation: "Espagne", club: "Espagne", image: "https://i.postimg.cc/TY8qS7ms/IMG-1034.gif" },
-    { name: "Oyarzabal", rating: 94, position: "ST", nation: "Espagne", club: "Espagne", image: "https://i.postimg.cc/8zNdk7Z4/IMG-1035.gif" },
-    { name: "Cucurella", rating: 98, position: "LB", nation: "Espagne", club: "Espagne", image: "https://i.postimg.cc/bwgxZqMk/IMG-1036.gif" },
-    { name: "Cubarsi", rating: 97, position: "CB", nation: "Espagne", club: "Espagne", image: "https://i.postimg.cc/26bh9h5z/IMG-1037.gif" },
-    { name: "Lamine Yamal", rating: 98, position: "RW/RM", nation: "Espagne", club: "Espagne", image: "https://i.postimg.cc/g2zRFfJn/IMG-1038.gif" },
-    { name: "Puyol", rating: 97, position: "RB/CB", nation: "Espagne", club: "Icône", image: "https://i.postimg.cc/zvkBxGTT/IMG-1039.gif" },
-    { name: "Raul", rating: 97, position: "ST", nation: "Espagne", club: "Icône", image: "https://i.postimg.cc/JnN4hzYm/IMG-1040.gif" },
-    { name: "Casillas", rating: 99, position: "GK", nation: "Espagne", club: "Icône", image: "https://i.postimg.cc/65559wdD/IMG-1041.gif" },
-    { name: "Iniesta", rating: 99, position: "CM/CAM/CDM", nation: "Espagne", club: "Icône", image: "https://i.postimg.cc/JnLMSWrd/IMG-1042.gif" },
-    { name: "Sergio Ramos", rating: 98, position: "CB", nation: "Espagne", club: "Icône", image: "https://i.postimg.cc/yYdBMjKH/IMG-1043.gif" },
-    { name: "Unai Simon", rating: 96, position: "GK", nation: "Espagne", club: "Espagne", image: "https://i.postimg.cc/qBQ4DY9v/IMG-1044.gif" }
+  // --- ESPAGNE 🇪🇸 ---
+  { name: 'Yeremy Pino', gen: 90, pos: 'RM/RW', nation: 'Espagne', club: 'Espagne', image: 'https://i.postimg.cc/G34q6TfJ/IMG-1029.gif' },
+  { name: 'Grimaldo', gen: 93, pos: 'LM/LW/LB', nation: 'Espagne', club: 'Espagne', image: 'https://i.postimg.cc/vH9XZFbZ/IMG-1030.gif' },
+  { name: 'Marcos Llorente', gen: 93, pos: 'RM/RB', nation: 'Espagne', club: 'Espagne', image: 'https://i.postimg.cc/Vk8gSGkK/IMG-1031.gif' },
+  { name: 'Ruiz', gen: 95, pos: 'CM', nation: 'Espagne', club: 'Espagne', image: 'https://i.postimg.cc/pd0J6PYg/IMG-1032.gif' },
+  { name: 'Rodri', gen: 98, pos: 'CDM/CM', nation: 'Espagne', club: 'Espagne', image: 'https://i.postimg.cc/bJs9X4m2/IMG-1033.gif' },
+  { name: 'Ferran Torres', gen: 95, pos: 'LW/ST', nation: 'Espagne', club: 'Espagne', image: 'https://i.postimg.cc/TY8qS7ms/IMG-1034.gif' },
+  { name: 'Oyorzabal', gen: 94, pos: 'ST', nation: 'Espagne', club: 'Espagne', image: 'https://i.postimg.cc/8zNdk7Z4/IMG-1035.gif' },
+  { name: 'Cucurella', gen: 98, pos: 'LB', nation: 'Espagne', club: 'Espagne', image: 'https://i.postimg.cc/bwgxZqMk/IMG-1036.gif' },
+  { name: 'Cubarsi', gen: 97, pos: 'CB', nation: 'Espagne', club: 'Espagne', image: 'https://i.postimg.cc/26bh9h5z/IMG-1037.gif' },
+  { name: 'Lamine Yamal', gen: 98, pos: 'RW/RM', nation: 'Espagne', club: 'Espagne', image: 'https://i.postimg.cc/g2zRFfJn/IMG-1038.gif' },
+  { name: 'Puyol', gen: 97, pos: 'RB/CB', nation: 'Espagne', club: 'Icone', image: 'https://i.postimg.cc/zvkBxGTT/IMG-1039.gif' },
+  { name: 'Raul', gen: 97, pos: 'ST', nation: 'Espagne', club: 'Icone', image: 'https://i.postimg.cc/JnN4hzYm/IMG-1040.gif' },
+  { name: 'Casillas', gen: 99, pos: 'GK', nation: 'Espagne', club: 'Icone', image: 'https://i.postimg.cc/65559wdD/IMG-1041.gif' },
+  { name: 'Iniesta', gen: 99, pos: 'CM/CAM/CDM', nation: 'Espagne', club: 'Icone', image: 'https://i.postimg.cc/JnLMSWrd/IMG-1042.gif' },
+  { name: 'Sergio Ramos', gen: 98, pos: 'CB', nation: 'Espagne', club: 'Icone', image: 'https://i.postimg.cc/yYdBMjKH/IMG-1043.gif' },
+  { name: 'Unai Simon', gen: 96, pos: 'GK', nation: 'Espagne', club: 'Espagne', image: 'https://i.postimg.cc/qBQ4DY9v/IMG-1044.gif' }
 ];
 
 // LISTE DE DISPOSITIFS (Exactement 11 joueurs par formation avec rôles stricts et corrects)
@@ -604,10 +632,28 @@ function initPitchSlots(formKey) {
 initPitchSlots('433');
 
 /* --- AUTHENTIFICATION & STOCKAGE
-   Tout passe maintenant par nos propres routes /api (voir dossier /api), qui elles-mêmes
-   parlent à Firestore depuis le serveur Vercel. Le navigateur ne contacte jamais Firebase
-   directement, donc aucun filtre réseau/MDM ne peut voir ni bloquer ces échanges. --- */
+   Deux modes possibles, choisis sur l'écran d'accueil :
+   - 'online'  : tout passe par nos routes /api, qui parlent à Firestore côté serveur.
+                 Donne accès aux amis, matchs entre amis, échanges, classement.
+   - 'local'   : tout est enregistré uniquement dans le localStorage de cet appareil/navigateur.
+                 Équipe, packs et matchs contre les équipes nationales fonctionnent pareil,
+                 mais amis/matchs entre amis/échanges/classement sont indisponibles. --- */
 let currentPassword = null;
+let playMode = 'online';
+
+function selectMode(mode) {
+  playMode = mode;
+  document.getElementById('mode-select-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-mode-label').innerText = mode === 'local'
+    ? "Mode LOCAL — connecte-toi ou joue en Invité"
+    : "Mode EN LIGNE — connecte-toi ou joue en Invité";
+}
+
+function backToModeSelect() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('mode-select-screen').style.display = 'flex';
+}
 
 function starterInventory() {
   return [
@@ -617,10 +663,50 @@ function starterInventory() {
   ];
 }
 
+/* ----- MODE LOCAL (localStorage) ----- */
+function getLocalUsers() {
+  try { return JSON.parse(localStorage.getItem('fc_mobile_local_users')) || {}; }
+  catch(e) { return {}; }
+}
+function setLocalUsers(users) {
+  localStorage.setItem('fc_mobile_local_users', JSON.stringify(users));
+}
+
+function registerUserLocal(id, mdp) {
+  let users = getLocalUsers();
+  if (users[id]) return alert("Ce compte local existe déjà.");
+  const initData = {
+    password: mdp, gems: 15000, inventory: starterInventory(), currentFormation: '433',
+    pitch: {}, teamIdCounter: 3, pity95: 0, pity98: 0, friends: []
+  };
+  users[id] = initData;
+  setLocalUsers(users);
+  currentPassword = mdp;
+  performLogin(id, initData, false);
+}
+
+function loginUserLocal(id, mdp) {
+  let users = getLocalUsers();
+  if (!users[id] || users[id].password !== mdp) return alert("Identifiants incorrects (compte local).");
+  currentPassword = mdp;
+  performLogin(id, users[id], false);
+}
+
+function saveGameLocal() {
+  if (!currentUser) return;
+  let users = getLocalUsers();
+  users[currentUser] = { password: currentPassword, gems, inventory, currentFormation, pitch, teamIdCounter, pity95, pity98, friends: [] };
+  setLocalUsers(users);
+}
+
+/* ----- Fonctions communes, qui aiguillent selon playMode ----- */
 async function registerUser() {
   const id = document.getElementById('username-input').value.trim();
   const mdp = document.getElementById('password-input').value.trim();
   if(!id || !mdp) return alert("ID et mot de passe requis.");
+
+  if (playMode === 'local') return registerUserLocal(id, mdp);
+
   try {
     const res = await fetch('/api/register', {
       method: 'POST',
@@ -642,6 +728,9 @@ async function loginUser() {
   const id = document.getElementById('username-input').value.trim();
   const mdp = document.getElementById('password-input').value.trim();
   if(!id || !mdp) return alert("ID et mot de passe requis.");
+
+  if (playMode === 'local') return loginUserLocal(id, mdp);
+
   try {
     const res = await fetch('/api/login', {
       method: 'POST',
@@ -693,30 +782,39 @@ function performLogin(username, data, isNew) {
   let isAdmin = !isGuest && data && data.isAdmin === true;
   document.getElementById('admin-nav-btn').style.display = isAdmin ? 'block' : 'none';
 
+  // Amis / Classement uniquement disponibles en mode en ligne
+  const onlineOnlyAvailable = playMode === 'online' && !isGuest;
+  document.getElementById('nav-amis-btn').style.display = onlineOnlyAvailable ? 'block' : 'none';
+  document.getElementById('nav-classement-btn').style.display = onlineOnlyAvailable ? 'block' : 'none';
+
   document.getElementById('login-screen').style.display = 'none'; 
   document.getElementById('game-container').style.display = 'block';
   document.getElementById('gem-count').innerText = gems.toLocaleString();
   updatePitchUI(); 
   calculateOVR();
   updatePityUI();
-  updateFriendsUI();
-  updateLeaderboard();
 
   if (isNew) saveGame(); // Persister le pack de départ tout de suite
 
-  if (!isGuest) {
+  if (onlineOnlyAvailable) {
+    updateFriendsUI();
+    updateLeaderboard();
     startHeartbeat();
     startGlobalPolling();
   }
 }
 
 async function saveGame() {
-  if (!currentUser || isGuest) return; // Les invités ne sont pas sauvegardés en ligne
+  if (!currentUser || isGuest) return; // Les invités ne sont pas sauvegardés
+
+  if (playMode === 'local') { saveGameLocal(); return; }
+
   try {
     await fetch('/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: currentUser, password: currentPassword, gems, inventory, currentFormation, pitch, teamIdCounter, pity95, pity98, friends })
+      body: JSON.stringify({ id: currentUser, password: currentPassword, gems, inventory, currentFormation, pitch, teamIdCounter, pity95, pity98, friends }),
+      keepalive: true // la requête continue même si l'onglet se ferme/se met en veille juste après
     });
   } catch(e) {
     console.error("Erreur de sauvegarde :", e);
@@ -724,7 +822,7 @@ async function saveGame() {
 }
 
 async function refreshMyAccountData() {
-  if (isGuest) return;
+  if (isGuest || playMode === 'local') return;
   try {
     const res = await fetch(`/api/me?id=${encodeURIComponent(currentUser)}&password=${encodeURIComponent(currentPassword)}`);
     const data = await res.json();
@@ -749,16 +847,37 @@ function logout() {
 }
 
 function resetAllSaves() { 
-  alert("Les comptes sont désormais stockés en ligne et ne peuvent plus être effacés localement.");
+  if (playMode === 'local') {
+    if (confirm("Effacer toutes les sauvegardes locales de cet appareil ?")) {
+      localStorage.removeItem('fc_mobile_local_users');
+      alert("Données locales effacées.");
+    }
+    return;
+  }
+  alert("Les comptes en ligne sont stockés sur le serveur et ne peuvent pas être effacés localement.");
 }
 
-/* --- PRÉSENCE EN LIGNE + NOTIFICATIONS (demandes d'amis / invitations à un match) --- */
+// Filet de sécurité : si l'appareil ferme/masque l'app avant qu'un saveGame() normal
+// n'ait eu le temps de finir, on retente une dernière sauvegarde fiable.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && currentUser && !isGuest) saveGame();
+});
+window.addEventListener('pagehide', () => {
+  if (currentUser && !isGuest) saveGame();
+});
+
+/* --- PRÉSENCE EN LIGNE + NOTIFICATIONS (demandes d'amis / invitations à un match ou un échange)
+   Optimisé pour rester très en dessous du quota gratuit Firestore (20 000 écritures/jour) :
+   - un seul ping de présence toutes les 60s (pas 20s)
+   - une seule requête groupée toutes les 15s au lieu de deux requêtes toutes les 7s
+   - tout est mis en pause dès que l'onglet est masqué/en arrière-plan --- */
 let heartbeatInterval = null;
 let globalPollInterval = null;
 
 function startHeartbeat() {
   clearInterval(heartbeatInterval);
   const ping = () => {
+    if (document.hidden) return;
     fetch('/api/heartbeat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -766,46 +885,58 @@ function startHeartbeat() {
     }).catch(()=>{});
   };
   ping();
-  heartbeatInterval = setInterval(ping, 20000);
+  heartbeatInterval = setInterval(ping, 60000);
 }
 
 function startGlobalPolling() {
   clearInterval(globalPollInterval);
-  globalPollInterval = setInterval(async () => {
-    if (!currentUser || isGuest) return;
+  globalPollInterval = setInterval(checkNotifications, 15000);
+  checkNotifications();
+}
 
-    // Invitations de match en attente
-    if (!pendingMatchId) {
-      try {
-        const res = await fetch('/api/match?action=pending&id=' + encodeURIComponent(currentUser));
-        const invites = await res.json();
-        if (Array.isArray(invites) && invites.length) {
-          const invite = invites[0];
-          const accept = confirm(`${invite.from} t'invite à un match amical ! Accepter ?`);
-          await respondMatchInvite(invite.id, accept);
-        }
-      } catch(e) { console.error(e); }
+async function checkNotifications() {
+  if (!currentUser || isGuest || document.hidden) return;
+  try {
+    const res = await fetch('/api/notifications?id=' + encodeURIComponent(currentUser));
+    const data = await res.json();
+    if (!res.ok) return;
+
+    friendRequestsIncoming = data.incoming || [];
+    friends = data.friends || [];
+    if (document.getElementById('amis') && document.getElementById('amis').classList.contains('active')) {
+      updateFriendsUI();
     }
 
-    // Demandes d'amis (rafraîchit juste la liste, affichée si l'onglet Amis est ouvert)
-    try {
-      const res2 = await fetch('/api/friend?id=' + encodeURIComponent(currentUser));
-      const data2 = await res2.json();
-      if (res2.ok) {
-        friendRequestsIncoming = data2.incoming || [];
-        friends = data2.friends || [];
-        if (document.getElementById('amis') && document.getElementById('amis').classList.contains('active')) {
-          updateFriendsUI();
-        }
-      }
-    } catch(e) { console.error(e); }
-  }, 7000);
+    if (!pendingMatchId && Array.isArray(data.pendingMatches) && data.pendingMatches.length) {
+      const invite = data.pendingMatches[0];
+      const accept = confirm(`${invite.from} t'invite à un match amical ! Accepter ?`);
+      await respondMatchInvite(invite.id, accept);
+    }
+
+    if (!pendingTradeId && Array.isArray(data.pendingTrades) && data.pendingTrades.length) {
+      const invite = data.pendingTrades[0];
+      const accept = confirm(`${invite.from} te propose un échange ! Accepter ?`);
+      await respondTradeInvite(invite.id, accept, invite.from);
+    }
+  } catch(e) { console.error(e); }
 }
 
 function stopGlobalPolling() {
   clearInterval(heartbeatInterval);
   clearInterval(globalPollInterval);
 }
+
+// Reprend immédiatement dès que l'utilisateur revient sur l'onglet (au lieu d'attendre l'intervalle)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && currentUser && !isGuest) {
+    checkNotifications();
+    fetch('/api/heartbeat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: currentUser, password: currentPassword })
+    }).catch(()=>{});
+  }
+});
 
 /* --- ADMIN --- */
 function adminAddGems() {
@@ -978,12 +1109,23 @@ function playWalkoutAnimation(player, cardHTML) {
 
 /* --- GESTION ÉQUIPE & INVENTAIRE (Bug de vente corrigé) --- */
 let currentSlotKey = null;
+// Un joueur peut désormais avoir plusieurs postes séparés par '/', ex: 'LB/RB'.
+// Cette fonction vérifie si un des postes du joueur correspond au slot demandé.
+function playerCanPlaySlot(playerPos, cleanSlotPos) {
+  const equivalences = {
+    'LWB': 'LB', 'RWB': 'RB', 'CF': 'ST', 'LF': 'LW', 'RF': 'RW', 'LAM': 'CAM', 'RAM': 'CAM'
+  };
+  const targetPos = equivalences[cleanSlotPos] || cleanSlotPos;
+  const playerPositions = (playerPos || '').split('/').map(p => p.trim());
+  return playerPositions.includes(targetPos);
+}
+
 function openInventory(slotId) {
   currentSlotKey = 'slot-' + slotId; 
   let cleanPos = slotId.replace(/[0-9]/g, '');
 
   let available = inventory.filter(p => {
-    let matchesPos = (p.pos === cleanPos || (cleanPos.startsWith('CB') && p.pos === 'CB') || (cleanPos.startsWith('ST') && p.pos === 'ST') || (cleanPos.startsWith('CM') && p.pos === 'CM') || (cleanPos.startsWith('CDM') && p.pos === 'CDM') || (cleanPos.startsWith('CAM') && p.pos === 'CAM') || (cleanPos.startsWith('LM') && p.pos === 'LM') || (cleanPos.startsWith('RM') && p.pos === 'RM') || (cleanPos.startsWith('LB') && p.pos === 'LB') || (cleanPos.startsWith('RB') && p.pos === 'RB') || (cleanPos.startsWith('LWB') && p.pos === 'LB') || (cleanPos.startsWith('RWB') && p.pos === 'RB') || (cleanPos.startsWith('CF') && p.pos === 'ST') || (cleanPos.startsWith('LF') && p.pos === 'LW') || (cleanPos.startsWith('RF') && p.pos === 'RW') || (cleanPos.startsWith('LAM') && p.pos === 'CAM') || (cleanPos.startsWith('RAM') && p.pos === 'CAM'));
+    let matchesPos = playerCanPlaySlot(p.pos, cleanPos);
     let notOnPitch = !Object.values(pitch).some(onP => onP && onP.uniqueId === p.uniqueId);
     return matchesPos && notOnPitch;
   }).sort((a,b)=>b.gen-a.gen);
@@ -1186,6 +1328,7 @@ let isMatchHost = false;
 let matchWaitInterval = null;
 let liveMatchInterval = null;
 let lastRenderedEventCount = 0;
+let matchOpponentName = '';
 
 async function inviteFriendMatch(fId) {
   const myOvr = calculateOVR();
@@ -1200,15 +1343,16 @@ async function inviteFriendMatch(fId) {
     if (!res.ok) return alert(data.error || "Impossible d'inviter cet ami.");
     pendingMatchId = data.id;
     isMatchHost = true;
+    matchOpponentName = fId;
     alert(`Invitation envoyée à ${fId}. En attente de sa réponse...`);
     clearInterval(matchWaitInterval);
     matchWaitInterval = setInterval(async () => {
       try {
         const r = await fetch('/api/match?matchId=' + encodeURIComponent(pendingMatchId));
         const d = await r.json();
-        if (d.status === 'live') {
+        if (d.status === 'betting') {
           clearInterval(matchWaitInterval);
-          startLiveMatchScreen(d, true);
+          openMatchBetModal(fId, true);
         } else if (d.status === 'declined') {
           clearInterval(matchWaitInterval);
           pendingMatchId = null;
@@ -1234,7 +1378,79 @@ async function respondMatchInvite(matchId, accept) {
     if (!res.ok) return alert(data.error || "Erreur.");
     if (accept) {
       pendingMatchId = matchId;
-      startLiveMatchScreen(data, false);
+      isMatchHost = false;
+      matchOpponentName = data.players[0];
+      openMatchBetModal(matchOpponentName, false);
+    }
+  } catch(e) {
+    console.error(e);
+    alert("Erreur de connexion au serveur.");
+  }
+}
+
+/* --- Phase de mise avant le match --- */
+function openMatchBetModal(oppName, isHost) {
+  isMatchHost = isHost;
+  matchOpponentName = oppName;
+  document.getElementById('bet-opponent-name').innerText = oppName;
+  document.getElementById('bet-status-line').innerText = '';
+  document.getElementById('bet-gems-input').value = '0';
+  document.getElementById('bet-gems-input').disabled = false;
+  document.getElementById('bet-lock-btn').disabled = false;
+  document.getElementById('bet-nobet-btn').disabled = false;
+  document.getElementById('match-bet-modal').classList.remove('hidden');
+}
+
+function submitBet() {
+  const val = parseInt(document.getElementById('bet-gems-input').value) || 0;
+  if (val < 0) return alert("Le montant doit être positif.");
+  if (val > gems) return alert("Tu n'as pas assez de gemmes pour cette mise.");
+  lockMatchBet(val);
+}
+
+function submitNoBet() {
+  lockMatchBet(0);
+}
+
+async function lockMatchBet(amount) {
+  document.getElementById('bet-gems-input').disabled = true;
+  document.getElementById('bet-lock-btn').disabled = true;
+  document.getElementById('bet-nobet-btn').disabled = true;
+  try {
+    const res = await fetch('/api/match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'setBet', id: currentUser, password: currentPassword, matchId: pendingMatchId, bet: amount })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Erreur lors de la mise.");
+      document.getElementById('bet-gems-input').disabled = false;
+      document.getElementById('bet-lock-btn').disabled = false;
+      document.getElementById('bet-nobet-btn').disabled = false;
+      return;
+    }
+    if (amount > 0) {
+      gems -= amount;
+      document.getElementById('gem-count').innerText = gems.toLocaleString();
+    }
+    if (data.status === 'live') {
+      document.getElementById('match-bet-modal').classList.add('hidden');
+      startLiveMatchScreen(data, isMatchHost);
+    } else {
+      document.getElementById('bet-status-line').innerText = "Mise validée ! En attente de l'adversaire...";
+      clearInterval(matchWaitInterval);
+      matchWaitInterval = setInterval(async () => {
+        try {
+          const r = await fetch('/api/match?matchId=' + encodeURIComponent(pendingMatchId));
+          const d = await r.json();
+          if (d.status === 'live') {
+            clearInterval(matchWaitInterval);
+            document.getElementById('match-bet-modal').classList.add('hidden');
+            startLiveMatchScreen(d, isMatchHost);
+          }
+        } catch(e) { console.error(e); }
+      }, 2000);
     }
   } catch(e) {
     console.error(e);
@@ -1247,13 +1463,17 @@ function startLiveMatchScreen(matchData, isHost) {
   pendingMatchId = matchData.id;
   lastRenderedEventCount = 0;
 
+  const myName = currentUser;
   const oppName = isHost ? matchData.players[1] : matchData.players[0];
-  document.getElementById('sim-my-ovr').innerText = isHost ? matchData.hostOvr : matchData.guestOvr;
+  document.getElementById('sim-me-name').innerHTML = `${myName}<br>(GÉN: <span id="sim-my-ovr">${isHost ? matchData.hostOvr : matchData.guestOvr}</span>)`;
   document.getElementById('sim-opp-name').innerHTML = `${oppName}<br>(GÉN: ${isHost ? matchData.guestOvr : matchData.hostOvr})`;
   document.getElementById('sim-score-home').innerText = matchData.homeScore;
   document.getElementById('sim-score-away').innerText = matchData.awayScore;
   document.getElementById('sim-clock').innerText = matchData.time;
-  document.getElementById('sim-feed').innerHTML = `<div class="sim-event">⏱️ Match en direct contre ${oppName} ! (Plus de GÉN = avantage, mais rien n'est garanti)</div>`;
+  const betLine = (matchData.hostBet || matchData.guestBet)
+    ? ` Mise en jeu : ${((matchData.hostBet||0) + (matchData.guestBet||0)).toLocaleString()} 💎 au total !`
+    : '';
+  document.getElementById('sim-feed').innerHTML = `<div class="sim-event">⏱️ Match en direct contre ${oppName} !${betLine}</div>`;
 
   const speedBtn = document.getElementById('sim-speed-btn');
   let isFast = false;
@@ -1298,7 +1518,9 @@ async function pollOrTickLiveMatch() {
     if (data.status === 'finished') {
       clearInterval(liveMatchInterval);
       const myPrize = isMatchHost ? data.hostPrize : data.guestPrize;
-      gems += myPrize || 0;
+      const myBetPayout = isMatchHost ? data.hostBetPayout : data.guestBetPayout;
+      const totalGain = (myPrize || 0) + (myBetPayout || 0);
+      gems += totalGain;
       document.getElementById('gem-count').innerText = gems.toLocaleString();
       const myScore = isMatchHost ? data.homeScore : data.awayScore;
       const oppScore = isMatchHost ? data.awayScore : data.homeScore;
@@ -1306,9 +1528,10 @@ async function pollOrTickLiveMatch() {
         document.getElementById('text-match-screen').classList.add('hidden');
         let won = myScore > oppScore;
         let draw = myScore === oppScore;
-        let msg = won ? `VICTOIRE ${myScore}-${oppScore} ! 🏆\n+${(myPrize||0).toLocaleString()} 💎` :
-                   draw ? `MATCH NUL ${myScore}-${oppScore} 🤝\n+${(myPrize||0).toLocaleString()} 💎` :
-                   `DÉFAITE ${myScore}-${oppScore} ❌\n+${(myPrize||0).toLocaleString()} 💎 de consolation`;
+        let betLine = (myBetPayout || 0) > 0 ? `\n(dont ${myBetPayout.toLocaleString()} 💎 de mise récupérée/gagnée)` : '';
+        let msg = won ? `VICTOIRE ${myScore}-${oppScore} ! 🏆\n+${totalGain.toLocaleString()} 💎${betLine}` :
+                   draw ? `MATCH NUL ${myScore}-${oppScore} 🤝\n+${totalGain.toLocaleString()} 💎${betLine}` :
+                   `DÉFAITE ${myScore}-${oppScore} ❌\n+${totalGain.toLocaleString()} 💎 de consolation`;
         alert(msg);
         pendingMatchId = null;
         saveGame();
@@ -1342,6 +1565,8 @@ let currentTradeState = null;
 let myTradeSelection = [];
 let tradePollInterval = null;
 let tradeCountdownInterval = null;
+let tradeWaitInterval = null;
+let tradeFriendName = '';
 
 async function openTradeModal(fId) {
   try {
@@ -1351,24 +1576,65 @@ async function openTradeModal(fId) {
       body: JSON.stringify({ action: 'create', id: currentUser, password: currentPassword, target: fId })
     });
     const data = await res.json();
-    if (!res.ok) return alert(data.error || "Impossible de démarrer l'échange.");
+    if (!res.ok) return alert(data.error || "Impossible de proposer un échange.");
 
     pendingTradeId = data.id;
-    currentTradeState = data;
-    myTradeSelection = [];
-    document.getElementById('trade-friend-name').innerText = fId;
-    document.getElementById('trade-friend-name-2').innerText = fId;
-    document.getElementById('my-trade-gems').value = '0';
-    renderMyTradeInventory();
-    renderTradeState(data);
-    document.getElementById('trade-modal').classList.remove('hidden');
+    tradeFriendName = fId;
+    alert(`Demande d'échange envoyée à ${fId}. En attente de sa réponse...`);
 
-    clearInterval(tradePollInterval);
-    tradePollInterval = setInterval(pollTradeState, 1500);
+    clearInterval(tradeWaitInterval);
+    tradeWaitInterval = setInterval(async () => {
+      try {
+        const r = await fetch('/api/trade?tradeId=' + encodeURIComponent(pendingTradeId));
+        const d = await r.json();
+        if (d.status === 'active') {
+          clearInterval(tradeWaitInterval);
+          openActiveTradeModal(d, fId);
+        } else if (d.status === 'declined') {
+          clearInterval(tradeWaitInterval);
+          pendingTradeId = null;
+          alert(`${fId} a refusé l'échange.`);
+        }
+      } catch(e) { console.error(e); }
+    }, 2000);
   } catch(e) {
     console.error(e);
     alert("Erreur de connexion au serveur.");
   }
+}
+
+async function respondTradeInvite(tradeId, accept, fromUser) {
+  try {
+    const res = await fetch('/api/trade', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'respond', id: currentUser, password: currentPassword, tradeId, accept })
+    });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error || "Erreur.");
+    if (accept) {
+      pendingTradeId = tradeId;
+      openActiveTradeModal(data, fromUser);
+    }
+  } catch(e) {
+    console.error(e);
+    alert("Erreur de connexion au serveur.");
+  }
+}
+
+function openActiveTradeModal(data, fId) {
+  pendingTradeId = data.id;
+  currentTradeState = data;
+  myTradeSelection = [];
+  document.getElementById('trade-friend-name').innerText = fId;
+  document.getElementById('trade-friend-name-2').innerText = fId;
+  document.getElementById('my-trade-gems').value = '0';
+  renderMyTradeInventory();
+  renderTradeState(data);
+  document.getElementById('trade-modal').classList.remove('hidden');
+
+  clearInterval(tradePollInterval);
+  tradePollInterval = setInterval(pollTradeState, 1500);
 }
 
 function renderMyTradeInventory() {
@@ -1457,6 +1723,7 @@ async function cancelTrade() {
 function closeTradeModal() {
   clearInterval(tradePollInterval);
   clearInterval(tradeCountdownInterval);
+  clearInterval(tradeWaitInterval);
   pendingTradeId = null;
   currentTradeState = null;
   closeModal('trade-modal');
@@ -1605,11 +1872,14 @@ function startTextMatch(oppOvr, reward, oppName) {
 
   simData = { time: 0, homeScore: 0, awayScore: 0, reward, oppName, oppOvr, myOvr, isFast: false, matchCompleted: false };
   
-  document.getElementById('sim-my-ovr').innerText = myOvr;
+  document.getElementById('sim-me-name').innerHTML = `Mon Équipe<br>(GÉN: <span id="sim-my-ovr">${myOvr}</span>)`;
   document.getElementById('sim-opp-name').innerHTML = `${oppName}<br>(GÉN: ${oppOvr})`;
   document.getElementById('sim-score-home').innerText = '0';
   document.getElementById('sim-score-away').innerText = '0';
-  document.getElementById('sim-speed-btn').innerText = "Vitesse x2";
+  const speedBtn = document.getElementById('sim-speed-btn');
+  speedBtn.style.display = 'inline-block';
+  speedBtn.innerText = "Vitesse x2";
+  speedBtn.onclick = toggleSimSpeed;
   
   const feed = document.getElementById('sim-feed');
   feed.innerHTML = `<div class="sim-event">⏱️ Coup d'envoi ! C'est parti face à ${oppName}. Plein écran activé.</div>`;
